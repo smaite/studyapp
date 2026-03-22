@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { AppContext } from '../App'
 import { sendMessage, analyzeImage } from '../services/aiService'
+import MarkdownRenderer from '../components/MarkdownRenderer'
 
 const subjectNames = {
   math: 'Mathematics',
@@ -280,7 +281,7 @@ export default function Tutor() {
               </div>
             )}
             
-            <div className={message.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai prose-chat'}>
+            <div className={message.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai'}>
               {message.image && (
                 <img 
                   src={message.image} 
@@ -288,9 +289,11 @@ export default function Tutor() {
                   className="max-w-xs rounded-lg mb-2"
                 />
               )}
-              <div 
-                dangerouslySetInnerHTML={{ __html: formatMessage(message.content) }}
-              />
+              {message.role === 'user' ? (
+                <p className="whitespace-pre-wrap">{message.content}</p>
+              ) : (
+                <MarkdownRenderer content={message.content} />
+              )}
             </div>
 
             {message.role === 'user' && (
@@ -306,8 +309,8 @@ export default function Tutor() {
             <div className="bg-primary-100 p-2 rounded-xl h-fit shrink-0">
               <Bot className="h-5 w-5 text-primary-600" />
             </div>
-            <div className="chat-bubble-ai prose-chat">
-              <div dangerouslySetInnerHTML={{ __html: formatMessage(streamingMessage) }} />
+            <div className="chat-bubble-ai">
+              <MarkdownRenderer content={streamingMessage} />
               <span className="inline-block w-2 h-4 bg-primary-600 animate-pulse ml-1" />
             </div>
           </div>

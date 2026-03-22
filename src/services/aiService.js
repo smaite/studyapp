@@ -1,4 +1,7 @@
-const API_BASE_URL = '/api'
+// AI Service Configuration - Using Antigravity Claude Proxy
+const API_BASE_URL = 'http://localhost:8080'
+const API_KEY = 'dummy'
+const MODEL = 'gemini-3-flash'
 
 export const analyzeDocument = async (content, fileType, subject, question) => {
   const systemPrompt = `You are an expert AI tutor helping a student study for their ${subject || 'exam'}. 
@@ -29,9 +32,8 @@ Guidelines:
     : question || `Please analyze this study material and create comprehensive study notes:\n\n${content}`
 
   const requestBody = {
-    model: 'claude-sonnet-4-6',
+    model: MODEL,
     max_tokens: 8192,
-    system: systemPrompt,
     messages: [{
       role: 'user',
       content: userContent
@@ -43,7 +45,7 @@ Guidelines:
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': 'test',
+        'x-api-key': API_KEY,
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify(requestBody)
@@ -54,7 +56,17 @@ Guidelines:
     }
 
     const data = await response.json()
-    return { content: data.content[0].text }
+    // Handle Anthropic response format
+    if (data.content && Array.isArray(data.content)) {
+      const textBlock = data.content.find(block => block.type === 'text')
+      if (textBlock && textBlock.text) {
+        return { content: textBlock.text }
+      }
+      if (data.content[0] && data.content[0].text) {
+        return { content: data.content[0].text }
+      }
+    }
+    throw new Error('Unexpected response format')
   } catch (error) {
     console.error('Document Analysis Error:', error)
     throw error
@@ -82,15 +94,20 @@ Guidelines:
 - Being patient and supportive
 Use markdown formatting for clarity.`
 
-  const requestBody = {
-    model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
-    stream: true,
-    system: systemPrompt,
-    messages: messages.map(msg => ({
+  // Build messages with system prompt as first user message if needed
+  const apiMessages = [
+    { role: 'user', content: systemPrompt },
+    { role: 'assistant', content: 'I understand. I will help you learn effectively with clear explanations and step-by-step guidance. How can I help you today?' },
+    ...messages.map(msg => ({
       role: msg.role,
       content: msg.content
     }))
+  ]
+
+  const requestBody = {
+    model: MODEL,
+    max_tokens: 4096,
+    messages: apiMessages
   }
 
   try {
@@ -98,7 +115,7 @@ Use markdown formatting for clarity.`
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': 'test',
+        'x-api-key': API_KEY,
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify(requestBody)
@@ -109,41 +126,23 @@ Use markdown formatting for clarity.`
       throw new Error(`API Error: ${response.status} - ${errorData}`)
     }
 
-    if (onChunk) {
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let fullText = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6)
-            if (data === '[DONE]') continue
-
-            try {
-              const parsed = JSON.parse(data)
-              if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-                fullText += parsed.delta.text
-                onChunk(fullText)
-              }
-            } catch (e) {
-              // Skip invalid JSON lines
-            }
-          }
-        }
+    const data = await response.json()
+    
+    // Handle Anthropic response format
+    if (data.content && Array.isArray(data.content)) {
+      const textBlock = data.content.find(block => block.type === 'text')
+      if (textBlock && textBlock.text) {
+        const text = textBlock.text
+        if (onChunk) onChunk(text)
+        return { content: text }
       }
-
-      return { content: fullText }
-    } else {
-      const data = await response.json()
-      return { content: data.content[0].text }
+      if (data.content[0] && data.content[0].text) {
+        const text = data.content[0].text
+        if (onChunk) onChunk(text)
+        return { content: text }
+      }
     }
+    throw new Error('Unexpected response format')
   } catch (error) {
     console.error('AI Service Error:', error)
     throw error
@@ -151,14 +150,13 @@ Use markdown formatting for clarity.`
 }
 
 export const analyzeImage = async (imageBase64, question, subject = null) => {
-  const systemPrompt = subject
+  const systemContext = subject
     ? `You are an expert AI tutor specializing in ${subject}. The student has shared an image (likely a problem or question). Analyze it carefully and help them understand and solve it step by step.`
     : `You are a helpful AI tutor. The student has shared an image. Analyze it and provide helpful guidance.`
 
   const requestBody = {
-    model: 'claude-sonnet-4-6',
+    model: MODEL,
     max_tokens: 4096,
-    system: systemPrompt,
     messages: [{
       role: 'user',
       content: [
@@ -172,7 +170,7 @@ export const analyzeImage = async (imageBase64, question, subject = null) => {
         },
         {
           type: 'text',
-          text: question || 'Please analyze this image and help me understand/solve it.'
+          text: `${systemContext}\n\n${question || 'Please analyze this image and help me understand/solve it.'}`
         }
       ]
     }]
@@ -183,7 +181,7 @@ export const analyzeImage = async (imageBase64, question, subject = null) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': 'test',
+        'x-api-key': API_KEY,
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify(requestBody)
@@ -194,7 +192,17 @@ export const analyzeImage = async (imageBase64, question, subject = null) => {
     }
 
     const data = await response.json()
-    return { content: data.content[0].text }
+    // Handle Anthropic response format
+    if (data.content && Array.isArray(data.content)) {
+      const textBlock = data.content.find(block => block.type === 'text')
+      if (textBlock && textBlock.text) {
+        return { content: textBlock.text }
+      }
+      if (data.content[0] && data.content[0].text) {
+        return { content: data.content[0].text }
+      }
+    }
+    throw new Error('Unexpected response format')
   } catch (error) {
     console.error('Image Analysis Error:', error)
     throw error
