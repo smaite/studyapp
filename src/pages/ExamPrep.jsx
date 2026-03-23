@@ -1411,10 +1411,10 @@ Return ONLY valid JSON array:
               <div className="p-4 border-t border-gray-800 bg-gray-900/50">
                 {lessonContent[currentStep]?.checkQuestion && !messages.some(m => m.role === 'user') && (
                   <div className="bg-primary-500/10 border border-primary-500/30 rounded-xl p-3 mb-3">
-                    <p className="text-sm text-primary-300">
-                      <Sparkles className="h-4 w-4 inline mr-2" />
-                      {lessonContent[currentStep].checkQuestion}
-                    </p>
+                    <div className="text-sm text-primary-300 flex items-start gap-2">
+                      <Sparkles className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      <MarkdownRenderer content={lessonContent[currentStep].checkQuestion} />
+                    </div>
                   </div>
                 )}
                 

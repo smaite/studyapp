@@ -1,6 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = 'https://qdxwtwelwufnsclvqaur.supabase.co'
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkeHd0d2Vsd3VmbnNjbHZxYXVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNjI3NjQsImV4cCI6MjA4OTgzODc2NH0.dQDMGxgvp_a908fV_hHySiHPNk8fWG9pj6Ra7kd-Z6Y'
+// Support both Vite (VITE_) and Netlify env variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Missing Supabase environment variables. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY')
+}
+
+export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '')

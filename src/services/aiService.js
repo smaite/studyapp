@@ -1,7 +1,8 @@
-// AI Service Configuration - Using Antigravity Claude Proxy
-const API_BASE_URL = 'http://localhost:8080'
-const API_KEY = 'dummy'
-const MODEL = 'gemini-3-flash'
+// AI Service Configuration - Using Environment Variables
+// Supports Vite (VITE_) for local dev and Netlify env vars for production
+const API_BASE_URL = import.meta.env.VITE_AI_API_URL || 'http://localhost:8080'
+const API_KEY = import.meta.env.VITE_AI_API_KEY || 'dummy'
+const MODEL = import.meta.env.VITE_AI_MODEL || 'gemini-3-flash'
 
 export const analyzeDocument = async (content, fileType, subject, question) => {
   const systemPrompt = `You are an expert AI tutor helping a student study for their ${subject || 'exam'}. 
