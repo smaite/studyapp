@@ -59,10 +59,25 @@ export default function ExamPrep() {
   const [showNewCourse, setShowNewCourse] = useState(false)
   const [subjectName, setSubjectName] = useState('')
   const [examDate, setExamDate] = useState('')
+  const [courseLanguage, setCourseLanguage] = useState('English')
   const [isProcessing, setIsProcessing] = useState(false)
   const [processingStatus, setProcessingStatus] = useState('')
   const fileInputRef = useRef(null)
   const addMaterialRef = useRef(null)
+  
+  // Supported languages
+  const languages = [
+    { code: 'en', name: 'English', native: 'English' },
+    { code: 'ne', name: 'Nepali', native: 'नेपाली' },
+    { code: 'hi', name: 'Hindi', native: 'हिन्दी' },
+    { code: 'es', name: 'Spanish', native: 'Español' },
+    { code: 'fr', name: 'French', native: 'Français' },
+    { code: 'de', name: 'German', native: 'Deutsch' },
+    { code: 'zh', name: 'Chinese', native: '中文' },
+    { code: 'ja', name: 'Japanese', native: '日本語' },
+    { code: 'ko', name: 'Korean', native: '한국어' },
+    { code: 'ar', name: 'Arabic', native: 'العربية' },
+  ]
   
   // Add materials modal
   const [showAddMaterials, setShowAddMaterials] = useState(false)
@@ -1851,24 +1866,24 @@ Problem: ${chatInput}`
 
           {/* AI Tutor Chat View */}
           {view === 'chat' && (
-            <div className="h-full flex flex-col bg-gray-950">
+            <div className="h-full flex flex-col bg-surface-900">
               {/* Chat Header */}
-              <div className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between shrink-0">
+              <div className="bg-surface-800/80 backdrop-blur-xl border-b border-white/5 px-4 py-3 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="bg-primary-500/20 p-2 rounded-xl">
+                  <div className="bg-primary-500/15 p-2 rounded-xl border border-primary-500/20">
                     <Bot className="h-5 w-5 text-primary-400" />
                   </div>
                   <div>
                     <h1 className="font-semibold text-white">AI Tutor</h1>
-                    <p className="text-xs text-gray-400">Ask me anything</p>
+                    <p className="text-xs text-gray-500">Ask me anything</p>
                   </div>
                 </div>
                 
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setMathMode(!mathMode)}
-                    className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                      mathMode ? 'bg-primary-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-xl transition-all cursor-pointer ${
+                      mathMode ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/25' : 'bg-white/5 text-gray-300 hover:bg-white/10'
                     }`}
                   >
                     <Calculator className="h-4 w-4" />
@@ -1876,7 +1891,7 @@ Problem: ${chatInput}`
                   </button>
                   <button
                     onClick={() => { setChatMessages([]); setMathMode(false) }}
-                    className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg"
+                    className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
                     title="Clear chat"
                   >
                     <RefreshCw className="h-4 w-4" />
@@ -1888,7 +1903,7 @@ Problem: ${chatInput}`
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {chatMessages.length === 0 && (
                   <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                    <div className="bg-primary-500/20 p-4 rounded-2xl mb-4">
+                    <div className="bg-primary-500/15 p-4 rounded-2xl mb-4 border border-primary-500/20">
                       {mathMode ? <Calculator className="h-10 w-10 text-primary-400" /> : <Sparkles className="h-10 w-10 text-primary-400" />}
                     </div>
                     <h2 className="text-xl font-semibold text-white mb-2">
@@ -1906,7 +1921,7 @@ Problem: ${chatInput}`
                         : ['Explain quantum physics', 'Help me with essay writing', 'Quiz me on history']
                       ).map((s, i) => (
                         <button key={i} onClick={() => setChatInput(s)}
-                          className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-full text-sm text-gray-300 hover:bg-gray-700">
+                          className="px-4 py-2 bg-white/5 border border-white/10 rounded-full text-sm text-gray-300 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer">
                           {s}
                         </button>
                       ))}
@@ -1917,14 +1932,14 @@ Problem: ${chatInput}`
                 {chatMessages.map((msg, idx) => (
                   <div key={idx} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     {msg.role === 'assistant' && (
-                      <div className="bg-primary-500/20 p-2 rounded-xl h-fit shrink-0">
+                      <div className="bg-primary-500/15 p-2 rounded-xl h-fit shrink-0 border border-primary-500/20">
                         <Bot className="h-5 w-5 text-primary-400" />
                       </div>
                     )}
                     
                     <div className={`max-w-[85%] ${msg.role === 'user' ? '' : 'space-y-3'}`}>
                       {msg.role === 'user' ? (
-                        <div className="bg-primary-600 text-white rounded-2xl rounded-br-md px-4 py-3">
+                        <div className="bg-primary-600 text-white rounded-2xl rounded-br-md px-4 py-3 shadow-lg shadow-primary-500/20">
                           {msg.image && <img src={msg.image} alt="Upload" className="max-h-40 rounded-lg mb-2" />}
                           <p className="whitespace-pre-wrap">{msg.content}</p>
                         </div>
@@ -1937,26 +1952,26 @@ Problem: ${chatInput}`
                           {msg.solution && (
                             <div className="flex items-center gap-2 flex-wrap">
                               <button onClick={() => handleChatFollowUp('Give me a similar problem')}
-                                className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-full text-sm text-gray-300">
+                                className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-full text-sm text-gray-300 transition-colors cursor-pointer">
                                 <RefreshCw className="h-3 w-3" /> Similar
                               </button>
                             </div>
                           )}
                           
-                          <div className="bg-gray-800/50 rounded-2xl p-4 border border-gray-700">
+                          <div className="bg-surface-800/80 rounded-2xl p-4 border border-white/5">
                             <MarkdownRenderer content={msg.content} />
                           </div>
                           
                           <div className="flex items-center gap-2 text-gray-500">
-                            <button className="p-1.5 hover:bg-gray-800 rounded-lg"><ThumbsUp className="h-4 w-4" /></button>
-                            <button className="p-1.5 hover:bg-gray-800 rounded-lg"><ThumbsDown className="h-4 w-4" /></button>
+                            <button className="p-1.5 hover:bg-white/5 rounded-lg transition-colors cursor-pointer"><ThumbsUp className="h-4 w-4" /></button>
+                            <button className="p-1.5 hover:bg-white/5 rounded-lg transition-colors cursor-pointer"><ThumbsDown className="h-4 w-4" /></button>
                           </div>
                           
                           {msg.solution?.followUpQuestions && (
                             <div className="space-y-2">
                               {msg.solution.followUpQuestions.slice(0, 3).map((q, i) => (
                                 <button key={i} onClick={() => handleChatFollowUp(q)}
-                                  className="block w-full text-left px-4 py-2 bg-gray-800/50 hover:bg-gray-800 border border-gray-700 rounded-xl text-gray-300 text-sm">
+                                  className="block w-full text-left px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-xl text-gray-300 text-sm transition-all cursor-pointer">
                                   {q}
                                 </button>
                               ))}
