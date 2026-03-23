@@ -997,20 +997,20 @@ Problem: ${chatInput}`
   ]
 
   return (
-    <div className="h-screen bg-[#0a0a0f] text-white flex flex-col md:flex-row overflow-hidden">
+    <div className="h-screen bg-surface-900 text-white flex flex-col md:flex-row overflow-hidden">
       {/* Mobile Header */}
-      <header className="md:hidden bg-[#0f0f15] border-b border-gray-800/50 px-4 py-3 flex items-center justify-between safe-area-top">
+      <header className="md:hidden bg-surface-800/95 backdrop-blur-xl border-b border-white/5 px-4 py-3 flex items-center justify-between safe-area-top">
         <div className="flex items-center gap-3">
           {view !== 'home' && (
             <button 
               onClick={() => setView(activeCourse && view !== 'course' ? 'course' : 'home')} 
-              className="p-2 -ml-2 hover:bg-gray-800 rounded-lg active:scale-95 transition-transform"
+              className="p-2 -ml-2 hover:bg-white/5 rounded-xl active:scale-95 transition-all cursor-pointer"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
           )}
           <div className="flex items-center gap-2">
-            <div className="bg-gradient-to-br from-primary-500 to-purple-600 p-1.5 rounded-lg">
+            <div className="bg-gradient-to-br from-primary-500 to-primary-600 p-1.5 rounded-xl shadow-lg shadow-primary-500/20">
               <GraduationCap className="h-5 w-5" />
             </div>
             <span className="font-semibold text-base truncate max-w-[180px]">
@@ -1023,7 +1023,7 @@ Problem: ${chatInput}`
           {activeCourse && view === 'course' && (
             <button 
               onClick={() => setShowAddMaterials(true)}
-              className="p-2 hover:bg-gray-800 rounded-lg active:scale-95 transition-transform"
+              className="p-2 hover:bg-white/5 rounded-xl active:scale-95 transition-all cursor-pointer"
             >
               <FileUp className="h-5 w-5 text-gray-400" />
             </button>
@@ -1031,7 +1031,7 @@ Problem: ${chatInput}`
           {view === 'home' && (
             <button 
               onClick={() => setShowNewCourse(true)}
-              className="p-2 bg-primary-600 rounded-lg active:scale-95 transition-transform"
+              className="p-2.5 bg-primary-600 hover:bg-primary-500 rounded-xl active:scale-95 transition-all shadow-lg shadow-primary-500/25 cursor-pointer"
             >
               <Plus className="h-5 w-5" />
             </button>
@@ -1040,10 +1040,10 @@ Problem: ${chatInput}`
       </header>
       
       {/* Desktop Sidebar */}
-      <div className={`hidden md:flex ${sidebarOpen ? 'w-64' : 'w-16'} bg-[#0f0f15] border-r border-gray-800/50 flex-col transition-all duration-300`}>
+      <div className={`hidden md:flex ${sidebarOpen ? 'w-64' : 'w-16'} bg-surface-800 border-r border-white/5 flex-col transition-all duration-300`}>
         {/* Logo */}
         <div className="p-4 flex items-center gap-3">
-          <div className="bg-gradient-to-br from-primary-500 to-purple-600 p-2 rounded-xl">
+          <div className="bg-gradient-to-br from-primary-500 to-primary-600 p-2 rounded-xl shadow-lg shadow-primary-500/20">
             <GraduationCap className="h-6 w-6" />
           </div>
           {sidebarOpen && <span className="font-bold text-lg">StudyAI</span>}
@@ -1053,25 +1053,35 @@ Problem: ${chatInput}`
         <nav className="flex-1 px-2 py-4 space-y-1">
           <button
             onClick={() => { setView('home'); setActiveCourse(null) }}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
-              view === 'home' && !activeCourse ? 'bg-primary-500/20 text-primary-400' : 'text-gray-400 hover:bg-gray-800/50 hover:text-white'
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer ${
+              view === 'home' && !activeCourse ? 'bg-primary-500/15 text-primary-400 border border-primary-500/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'
             }`}
           >
             <Home className="h-5 w-5 shrink-0" />
             {sidebarOpen && <span>Dashboard</span>}
           </button>
           
+          <button
+            onClick={() => setView('chat')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer ${
+              view === 'chat' ? 'bg-primary-500/15 text-primary-400 border border-primary-500/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            <Bot className="h-5 w-5 shrink-0" />
+            {sidebarOpen && <span>AI Tutor</span>}
+          </button>
+          
           {sidebarOpen && courses.length > 0 && (
             <div className="pt-4">
-              <p className="px-3 text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Your Courses</p>
+              <p className="px-3 text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Your Courses</p>
               {courses.slice(0, 5).map(course => {
                 const style = getSubjectStyle(course.name)
                 return (
                   <button
                     key={course.id}
                     onClick={() => { setActiveCourse(course); setView('course') }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${
-                      activeCourse?.id === course.id ? 'bg-gray-800/70 text-white' : 'text-gray-400 hover:bg-gray-800/50 hover:text-white'
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left cursor-pointer ${
+                      activeCourse?.id === course.id ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'
                     }`}
                   >
                     <span className="text-lg">{style.icon}</span>
@@ -1084,10 +1094,10 @@ Problem: ${chatInput}`
         </nav>
         
         {/* User */}
-        <div className="p-3 border-t border-gray-800/50">
+        <div className="p-3 border-t border-white/5">
           {sidebarOpen ? (
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center font-bold">
+            <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors cursor-pointer">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center font-bold text-sm shadow-lg shadow-primary-500/20">
                 {user?.email?.[0].toUpperCase() || 'U'}
               </div>
               <div className="flex-1 min-w-0">
@@ -1096,7 +1106,7 @@ Problem: ${chatInput}`
               </div>
             </div>
           ) : (
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center font-bold mx-auto">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center font-bold text-sm mx-auto shadow-lg shadow-primary-500/20 cursor-pointer">
               {user?.email?.[0].toUpperCase() || 'U'}
             </div>
           )}
@@ -1106,15 +1116,15 @@ Problem: ${chatInput}`
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Desktop Top Bar */}
-        <header className="hidden md:flex bg-[#0f0f15]/80 backdrop-blur-xl border-b border-gray-800/50 px-6 py-4 items-center justify-between">
+        <header className="hidden md:flex bg-surface-800/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-gray-800 rounded-lg">
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-white/5 rounded-xl transition-colors cursor-pointer">
               <Menu className="h-5 w-5 text-gray-400" />
             </button>
             
             {view !== 'home' && activeCourse && (
               <>
-                <button onClick={() => setView(view === 'course' ? 'home' : 'course')} className="p-2 hover:bg-gray-800 rounded-lg">
+                <button onClick={() => setView(view === 'course' ? 'home' : 'course')} className="p-2 hover:bg-white/5 rounded-xl cursor-pointer">
                   <ChevronLeft className="h-5 w-5 text-gray-400" />
                 </button>
                 <div>
@@ -1125,7 +1135,11 @@ Problem: ${chatInput}`
             )}
             
             {view === 'home' && (
-              <h1 className="text-xl font-semibold">Exam Prep</h1>
+              <h1 className="text-xl font-semibold">Dashboard</h1>
+            )}
+            
+            {view === 'chat' && (
+              <h1 className="text-xl font-semibold">AI Tutor</h1>
             )}
           </div>
           
@@ -1134,14 +1148,14 @@ Problem: ${chatInput}`
               <>
                 <button 
                   onClick={() => setShowAddMaterials(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm transition-colors cursor-pointer"
                 >
                   <FileUp className="h-4 w-4" />
                   Add Materials
                 </button>
                 <button 
                   onClick={shareCourse}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm transition-colors cursor-pointer"
               >
                 <Share2 className="h-4 w-4" />
                 Share
@@ -1151,7 +1165,7 @@ Problem: ${chatInput}`
             
             <button 
               onClick={() => setShowNewCourse(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-500 rounded-xl text-sm font-medium transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-500 rounded-xl text-sm font-medium transition-all shadow-lg shadow-primary-500/25 cursor-pointer"
             >
               <Plus className="h-4 w-4" />
               New Exam
@@ -1173,7 +1187,7 @@ Problem: ${chatInput}`
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search courses..."
-                    className="w-full bg-gray-900/50 border border-gray-800 rounded-xl pl-12 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500"
+                    className="w-full bg-surface-800/80 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
                   />
                 </div>
                 
@@ -1185,8 +1199,10 @@ Problem: ${chatInput}`
                       <button
                         key={cat}
                         onClick={() => setSelectedCategory(selectedCategory === fullCat ? 'all' : fullCat)}
-                        className={`flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-sm transition-all whitespace-nowrap shrink-0 ${
-                          selectedCategory === fullCat ? 'bg-gray-700 text-white' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800'
+                        className={`flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-sm transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                          selectedCategory === fullCat 
+                            ? 'bg-primary-500/15 text-primary-400 border border-primary-500/30' 
+                            : 'bg-surface-800/60 text-gray-400 hover:bg-white/5 border border-transparent'
                         }`}
                       >
                         <span>{subjectStyles[fullCat]?.icon}</span>
@@ -1201,7 +1217,8 @@ Problem: ${chatInput}`
               {courses.some(c => c.examDate) && (
                 <section className="mb-6 md:mb-8">
                   <h2 className="text-lg font-semibold mb-3 md:mb-4 flex items-center gap-2">
-                    Upcoming <ChevronRight className="h-4 w-4 text-gray-500" />
+                    <Clock className="h-5 w-5 text-amber-400" />
+                    Upcoming Exams
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                     {courses.filter(c => c.examDate && daysUntil(c.examDate) > 0).sort((a, b) => new Date(a.examDate) - new Date(b.examDate)).slice(0, 3).map(course => {
@@ -1211,26 +1228,24 @@ Problem: ${chatInput}`
                         <div
                           key={course.id}
                           onClick={() => { setActiveCourse(course); setView('course') }}
-                          className="bg-gradient-to-br from-gray-900 to-gray-900/50 border border-gray-800 rounded-2xl p-5 cursor-pointer hover:border-gray-700 transition-all group"
+                          className="bg-surface-800/60 border border-white/5 rounded-2xl p-5 cursor-pointer hover:bg-surface-700/60 hover:border-white/10 transition-all group"
                         >
                           <div className="flex items-start justify-between mb-4">
-                            <span className="bg-gray-800 px-3 py-1 rounded-full text-sm">{course.name.split(' ')[0]}</span>
-                            <div className={`w-10 h-10 rounded-full border-2 border-gray-700 flex items-center justify-center bg-gradient-to-br ${style.color} opacity-20`} />
+                            <span className="bg-white/5 px-3 py-1 rounded-full text-sm text-gray-300">{course.name.split(' ')[0]}</span>
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${style.color} text-xl`}>
+                              {style.icon}
+                            </div>
                           </div>
                           <h3 className="font-semibold text-lg mb-1 group-hover:text-primary-400 transition-colors">{course.name}</h3>
                           <p className="text-sm text-gray-500 mb-4 truncate">{course.lessons.length} lessons</p>
                           <div className="flex items-center gap-4 text-sm">
-                            <span className="text-red-400 flex items-center gap-1">
-                              <span className="w-2 h-2 bg-red-500 rounded-full" />
+                            <span className={`flex items-center gap-1.5 ${course.totalProgress < 50 ? 'text-amber-400' : 'text-success-400'}`}>
+                              <div className="w-2 h-2 rounded-full bg-current" />
                               {course.totalProgress}%
                             </span>
-                            <span className="text-gray-500 flex items-center gap-1">
-                              <GraduationCap className="h-4 w-4" />
-                              in {days} days
-                            </span>
-                            <span className="text-gray-500 flex items-center gap-1">
-                              <Users className="h-4 w-4" />
-                              {course.lessons.length}
+                            <span className="text-gray-400 flex items-center gap-1.5">
+                              <Calendar className="h-4 w-4" />
+                              {days}d left
                             </span>
                           </div>
                         </div>
@@ -1242,7 +1257,10 @@ Problem: ${chatInput}`
               
               {/* All Courses */}
               <section>
-                <h2 className="text-lg font-semibold mb-3 md:mb-4">Your Courses</h2>
+                <h2 className="text-lg font-semibold mb-3 md:mb-4 flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 text-primary-400" />
+                  Your Courses
+                </h2>
                 {filteredCourses.length === 0 ? (
                   <div className="text-center py-12 md:py-16 bg-gray-900/30 rounded-2xl border border-gray-800/50">
                     <div className="w-14 h-14 md:w-16 md:h-16 bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -1252,7 +1270,7 @@ Problem: ${chatInput}`
                     <p className="text-gray-500 mb-6 text-sm md:text-base px-4">Upload your study materials to get started</p>
                     <button 
                       onClick={() => setShowNewCourse(true)}
-                      className="bg-primary-600 hover:bg-primary-500 active:scale-95 px-5 md:px-6 py-2.5 md:py-3 rounded-xl font-medium inline-flex items-center gap-2 transition-transform"
+                      className="bg-primary-600 hover:bg-primary-500 active:scale-95 px-5 md:px-6 py-2.5 md:py-3 rounded-xl font-medium inline-flex items-center gap-2 transition-all shadow-lg shadow-primary-500/25 cursor-pointer"
                     >
                       <Plus className="h-5 w-5" />
                       Create Your First Course
@@ -1266,17 +1284,17 @@ Problem: ${chatInput}`
                         <div
                           key={course.id}
                           onClick={() => { setActiveCourse(course); setView(course.needsAssessment ? 'assessment' : 'course') }}
-                          className="bg-gray-900/50 border border-gray-800 rounded-2xl p-4 md:p-5 cursor-pointer hover:border-gray-700 active:scale-[0.98] transition-all group relative"
+                          className="bg-surface-800/60 border border-white/5 rounded-2xl p-4 md:p-5 cursor-pointer hover:bg-surface-700/60 hover:border-white/10 active:scale-[0.98] transition-all group relative"
                         >
                           <button
                             onClick={(e) => { e.stopPropagation(); deleteCourse(course.id) }}
-                            className="absolute top-3 right-3 md:top-4 md:right-4 p-1.5 hover:bg-red-500/20 rounded-lg md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                            className="absolute top-3 right-3 md:top-4 md:right-4 p-1.5 hover:bg-red-500/20 rounded-lg md:opacity-0 md:group-hover:opacity-100 transition-opacity cursor-pointer"
                           >
                             <X className="h-4 w-4 text-red-400" />
                           </button>
                           
                           <div className="flex items-start gap-3 md:block">
-                            <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl bg-gradient-to-br ${style.color} flex items-center justify-center text-xl md:text-2xl md:mb-4 shrink-0`}>
+                            <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl bg-gradient-to-br ${style.color} flex items-center justify-center text-xl md:text-2xl md:mb-4 shrink-0 shadow-lg`}>
                               {style.icon}
                             </div>
                             
@@ -1285,28 +1303,28 @@ Problem: ${chatInput}`
                               <p className="text-sm text-gray-500 mb-2 md:mb-4">{course.lessons.length} lessons</p>
                               
                               {course.needsAssessment ? (
-                                <div className="flex items-center gap-2 text-amber-400 text-xs md:text-sm">
+                                <div className="inline-flex items-center gap-2 text-amber-400 text-xs md:text-sm bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
                                   <Zap className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                   Take assessment
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-3">
-                                  <div className="flex-1 bg-gray-800 rounded-full h-1.5 md:h-2">
+                                  <div className="flex-1 bg-surface-700 rounded-full h-1.5 md:h-2 overflow-hidden">
                                     <div 
-                                      className={`h-1.5 md:h-2 rounded-full bg-gradient-to-r ${style.color}`} 
+                                      className={`h-full rounded-full bg-gradient-to-r ${style.color} transition-all duration-500`} 
                                       style={{ width: `${course.totalProgress}%` }} 
                                     />
                                   </div>
-                                  <span className="text-xs md:text-sm text-gray-400">{course.totalProgress}%</span>
+                                  <span className="text-xs md:text-sm text-gray-400 font-medium">{course.totalProgress}%</span>
                                 </div>
                               )}
                             </div>
                           </div>
                           
                           {course.sharedFrom && (
-                            <p className="text-xs text-gray-600 mt-3 flex items-center gap-1">
+                            <p className="text-xs text-gray-500 mt-3 flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-lg w-fit">
                               <Share2 className="h-3 w-3" />
-                              Shared by {course.sharedFrom}
+                              From {course.sharedFrom}
                             </p>
                           )}
                         </div>
@@ -1322,14 +1340,14 @@ Problem: ${chatInput}`
           {view === 'assessment' && activeCourse && (
             <div className="max-w-2xl mx-auto p-4 md:p-6">
               <div className="text-center mb-6 md:mb-8">
-                <div className="w-14 h-14 md:w-16 md:h-16 bg-primary-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <div className="w-14 h-14 md:w-16 md:h-16 bg-primary-500/15 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-primary-500/20">
                   <Brain className="h-7 w-7 md:h-8 md:w-8 text-primary-400" />
                 </div>
                 <h1 className="text-xl md:text-2xl font-bold mb-2">Let's See What You Know!</h1>
                 <p className="text-gray-400 text-sm md:text-base px-4">Answer these questions so I can personalize your learning.</p>
               </div>
               
-              <div className="bg-gray-900/50 rounded-2xl border border-gray-800 p-4 md:p-6">
+              <div className="bg-surface-800/60 rounded-2xl border border-white/5 p-4 md:p-6">
                 {isGenerating ? (
                   <div className="text-center py-10 md:py-12">
                     <Loader2 className="h-10 w-10 md:h-12 md:w-12 text-primary-500 animate-spin mx-auto mb-4" />
@@ -2217,55 +2235,55 @@ Problem: ${chatInput}`
       )}
       
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f0f15]/95 backdrop-blur-xl border-t border-gray-800/50 px-2 py-2 safe-area-bottom z-40">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface-800/95 backdrop-blur-xl border-t border-white/5 px-2 py-2 safe-area-bottom z-40">
         <div className="flex items-center justify-around max-w-md mx-auto">
           <button
             onClick={() => { setView('home'); setActiveCourse(null) }}
-            className={`flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-colors ${
-              view === 'home' ? 'text-primary-400' : 'text-gray-500'
+            className={`flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl transition-all cursor-pointer ${
+              view === 'home' ? 'text-primary-400 bg-primary-500/10' : 'text-gray-500 active:bg-white/5'
             }`}
           >
             <Home className="h-5 w-5" />
-            <span className="text-[10px]">Home</span>
+            <span className="text-[10px] font-medium">Home</span>
           </button>
           
           <button
             onClick={() => setView('chat')}
-            className={`flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-colors ${
-              view === 'chat' ? 'text-primary-400' : 'text-gray-500'
+            className={`flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl transition-all cursor-pointer ${
+              view === 'chat' ? 'text-primary-400 bg-primary-500/10' : 'text-gray-500 active:bg-white/5'
             }`}
           >
-            <MessageSquare className="h-5 w-5" />
-            <span className="text-[10px]">AI Tutor</span>
+            <Bot className="h-5 w-5" />
+            <span className="text-[10px] font-medium">AI Tutor</span>
           </button>
           
           <button
             onClick={() => setShowNewCourse(true)}
-            className="flex flex-col items-center gap-0.5 py-1.5 px-3 -mt-4"
+            className="flex flex-col items-center gap-0.5 py-1.5 px-3 -mt-5 cursor-pointer"
           >
-            <div className="bg-primary-600 p-2.5 rounded-xl shadow-lg shadow-primary-500/30">
+            <div className="bg-primary-600 hover:bg-primary-500 p-3 rounded-2xl shadow-lg shadow-primary-500/30 active:scale-95 transition-all">
               <Plus className="h-5 w-5" />
             </div>
           </button>
           
           <button
             onClick={() => activeCourse ? setView('course') : null}
-            className={`flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-colors ${
-              view === 'course' ? 'text-primary-400' : 'text-gray-500'
-            } ${!activeCourse ? 'opacity-50' : ''}`}
+            className={`flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl transition-all cursor-pointer ${
+              view === 'course' ? 'text-primary-400 bg-primary-500/10' : 'text-gray-500 active:bg-white/5'
+            } ${!activeCourse ? 'opacity-40' : ''}`}
           >
             <BookOpen className="h-5 w-5" />
-            <span className="text-[10px]">Course</span>
+            <span className="text-[10px] font-medium">Course</span>
           </button>
           
           <button
             onClick={() => {}}
-            className="flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-gray-500"
+            className="flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl text-gray-500 active:bg-white/5 transition-colors cursor-pointer"
           >
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center text-[10px] font-bold text-white">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center text-[10px] font-bold text-white shadow-sm">
               {user?.email?.[0].toUpperCase() || 'U'}
             </div>
-            <span className="text-[10px]">Profile</span>
+            <span className="text-[10px] font-medium">Profile</span>
           </button>
         </div>
       </nav>
