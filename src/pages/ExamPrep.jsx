@@ -6,7 +6,7 @@ import {
   Play, Lock, Check, PenTool, MessageSquare, Plus,
   Layers, Clock, BarChart3, HelpCircle, Search, Share2,
   Home, Calendar, History, Settings, Copy, Users, Link2,
-  ArrowRight, Zap, Star, Menu, ChevronDown
+  ArrowRight, Zap, Star, Menu, ChevronDown, FolderPlus, FileUp
 } from 'lucide-react'
 import { sendMessage, analyzeImage } from '../services/aiService'
 import MarkdownRenderer from '../components/MarkdownRenderer'
@@ -31,9 +31,13 @@ const subjectStyles = {
   default: { icon: '📖', color: 'from-primary-500 to-indigo-500' }
 }
 
+// Check if mobile
+const isMobile = () => window.innerWidth < 768
+
 export default function ExamPrep() {
   const { user, signOut } = useAuth()
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(() => !isMobile())
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   
   // Views: home, course, assessment, lesson-step, quiz, results, chat
   const [view, setView] = useState('home')
@@ -55,6 +59,10 @@ export default function ExamPrep() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [processingStatus, setProcessingStatus] = useState('')
   const fileInputRef = useRef(null)
+  const addMaterialRef = useRef(null)
+  
+  // Add materials modal
+  const [showAddMaterials, setShowAddMaterials] = useState(false)
   
   // Assessment & Quiz
   const [questions, setQuestions] = useState([])
@@ -80,6 +88,20 @@ export default function ExamPrep() {
   // Filter
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
+  
+  // Handle resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        setSidebarOpen(true)
+        setMobileNavOpen(false)
+      } else {
+        setSidebarOpen(false)
+      }
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(courses))
@@ -260,6 +282,141 @@ Return ONLY valid JSON array:
       setIsProcessing(false)
       setProcessingStatus('')
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  // Add materials to existing course
+  const handleAddMaterials = async (e) => {
+    const files = Array.from(e.target.files)
+    if (!files.length || !activeCourse) return
+
+    setIsProcessing(true)
+    setProcessingStatus('Reading new materials...')
+    setShowAddMaterials(false)
+
+    try {
+      let newContent = ''
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        setProcessingStatus(`Processing ${file.name}... (${i + 1}/${files.length})`)
+        
+        if (file.type === 'application/pdf') {
+          const text = await extractTextFromPDF(file)
+          if (text.length < 200) {
+            const arrayBuffer = await file.arrayBuffer()
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+            for (let p = 1; p <= Math.min(pdf.numPages, 5); p++) {
+              const page = await pdf.getPage(p)
+              const viewport = page.getViewport({ scale: 2 })
+              const canvas = document.createElement('canvas')
+              canvas.width = viewport.width
+              canvas.height = viewport.height
+              await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise
+              const response = await analyzeImage(canvas.toDataURL('image/png'), 'Extract all text from this document page', activeCourse.name)
+              newContent += response.content + '\n\n'
+            }
+          } else {
+            newContent += text + '\n\n'
+          }
+        } else if (file.type.startsWith('image/')) {
+          const reader = new FileReader()
+          const base64 = await new Promise(r => { reader.onloadend = () => r(reader.result); reader.readAsDataURL(file) })
+          const response = await analyzeImage(base64, 'Extract all text and content from this image', activeCourse.name)
+          newContent += response.content + '\n\n'
+        } else {
+          newContent += await file.text() + '\n\n'
+        }
+      }
+
+      setProcessingStatus('Analyzing new content and updating lessons...')
+      
+      // Combine with existing content
+      const combinedContent = activeCourse.content + '\n\n--- NEW MATERIALS ---\n\n' + newContent
+      
+      // Get existing lesson titles
+      const existingLessons = activeCourse.lessons.map(l => l.title).join(', ')
+      
+      const updatePrompt = `I have an existing course with these lessons: ${existingLessons}
+
+Here is NEW study material that was just added:
+${newContent.substring(0, 12000)}
+
+Analyze this new material and:
+1. If it contains topics already covered by existing lessons, DO NOT create new lessons for them
+2. If it contains NEW topics not covered, create new lessons for them
+3. If it expands on existing topics significantly, suggest what to add
+
+Return a JSON object:
+{
+  "newLessons": [{"id":${activeCourse.lessons.length + 1},"title":"New Topic","description":"...","keyPoints":["..."]}],
+  "updatedLessons": [{"existingTitle":"Lesson to update","additionalKeyPoints":["New point 1"]}],
+  "summary": "Brief summary of what was added"
+}
+
+Return ONLY valid JSON.`
+
+      const response = await sendMessage([{ role: 'user', content: updatePrompt }], activeCourse.name)
+      
+      let json = response.content.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
+      const start = json.indexOf('{'), end = json.lastIndexOf('}')
+      if (start !== -1 && end !== -1) json = json.substring(start, end + 1)
+      json = json.replace(/,(\s*[\]}])/g, '$1')
+      
+      const updates = JSON.parse(json)
+      
+      // Update the course
+      const updatedCourse = { ...activeCourse, content: combinedContent }
+      
+      // Add new lessons
+      if (updates.newLessons && updates.newLessons.length > 0) {
+        const newLessonsFormatted = updates.newLessons.map((l, idx) => ({
+          ...l,
+          id: activeCourse.lessons.length + idx + 1,
+          progress: 0,
+          quizScore: null,
+          completed: false,
+          knowledgeLevel: 50
+        }))
+        updatedCourse.lessons = [...updatedCourse.lessons, ...newLessonsFormatted]
+      }
+      
+      // Update existing lessons with new key points
+      if (updates.updatedLessons && updates.updatedLessons.length > 0) {
+        updates.updatedLessons.forEach(update => {
+          const lessonIdx = updatedCourse.lessons.findIndex(
+            l => l.title.toLowerCase().includes(update.existingTitle.toLowerCase()) ||
+                 update.existingTitle.toLowerCase().includes(l.title.toLowerCase())
+          )
+          if (lessonIdx !== -1 && update.additionalKeyPoints) {
+            const existingPoints = new Set(updatedCourse.lessons[lessonIdx].keyPoints.map(p => p.toLowerCase()))
+            const newPoints = update.additionalKeyPoints.filter(p => !existingPoints.has(p.toLowerCase()))
+            updatedCourse.lessons[lessonIdx].keyPoints = [
+              ...updatedCourse.lessons[lessonIdx].keyPoints,
+              ...newPoints
+            ]
+          }
+        })
+      }
+      
+      // Recalculate progress
+      updatedCourse.totalProgress = Math.round(
+        updatedCourse.lessons.reduce((s, l) => s + l.progress, 0) / updatedCourse.lessons.length
+      )
+      
+      setCourses(prev => prev.map(c => c.id === activeCourse.id ? updatedCourse : c))
+      setActiveCourse(updatedCourse)
+      
+      // Show summary
+      alert(`✅ Materials added!\n\n${updates.summary || 'Course updated successfully.'}\n\n${updates.newLessons?.length || 0} new lessons added.`)
+      
+    } catch (error) {
+      console.error('Error adding materials:', error)
+      alert('Error processing new materials: ' + error.message)
+    } finally {
+      setIsProcessing(false)
+      setProcessingStatus('')
+      if (addMaterialRef.current) addMaterialRef.current.value = ''
     }
   }
 
@@ -646,10 +803,59 @@ Return ONLY valid JSON array:
     return true
   })
 
+  // Mobile bottom nav items
+  const mobileNavItems = [
+    { id: 'home', icon: Home, label: 'Home' },
+    { id: 'search', icon: Search, label: 'Search' },
+    { id: 'add', icon: Plus, label: 'Add' },
+    { id: 'profile', icon: User, label: 'Profile' },
+  ]
+
   return (
-    <div className="h-screen bg-[#0a0a0f] text-white flex overflow-hidden">
-      {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-64' : 'w-16'} bg-[#0f0f15] border-r border-gray-800/50 flex flex-col transition-all duration-300`}>
+    <div className="h-screen bg-[#0a0a0f] text-white flex flex-col md:flex-row overflow-hidden">
+      {/* Mobile Header */}
+      <header className="md:hidden bg-[#0f0f15] border-b border-gray-800/50 px-4 py-3 flex items-center justify-between safe-area-top">
+        <div className="flex items-center gap-3">
+          {view !== 'home' && (
+            <button 
+              onClick={() => setView(activeCourse && view !== 'course' ? 'course' : 'home')} 
+              className="p-2 -ml-2 hover:bg-gray-800 rounded-lg active:scale-95 transition-transform"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+          )}
+          <div className="flex items-center gap-2">
+            <div className="bg-gradient-to-br from-primary-500 to-purple-600 p-1.5 rounded-lg">
+              <GraduationCap className="h-5 w-5" />
+            </div>
+            <span className="font-semibold text-base truncate max-w-[180px]">
+              {view === 'home' ? 'StudyAI' : activeCourse?.name || 'StudyAI'}
+            </span>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {activeCourse && view === 'course' && (
+            <button 
+              onClick={() => setShowAddMaterials(true)}
+              className="p-2 hover:bg-gray-800 rounded-lg active:scale-95 transition-transform"
+            >
+              <FileUp className="h-5 w-5 text-gray-400" />
+            </button>
+          )}
+          {view === 'home' && (
+            <button 
+              onClick={() => setShowNewCourse(true)}
+              className="p-2 bg-primary-600 rounded-lg active:scale-95 transition-transform"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+      </header>
+      
+      {/* Desktop Sidebar */}
+      <div className={`hidden md:flex ${sidebarOpen ? 'w-64' : 'w-16'} bg-[#0f0f15] border-r border-gray-800/50 flex-col transition-all duration-300`}>
         {/* Logo */}
         <div className="p-4 flex items-center gap-3">
           <div className="bg-gradient-to-br from-primary-500 to-purple-600 p-2 rounded-xl">
@@ -714,8 +920,8 @@ Return ONLY valid JSON array:
       
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Bar */}
-        <header className="bg-[#0f0f15]/80 backdrop-blur-xl border-b border-gray-800/50 px-6 py-4 flex items-center justify-between">
+        {/* Desktop Top Bar */}
+        <header className="hidden md:flex bg-[#0f0f15]/80 backdrop-blur-xl border-b border-gray-800/50 px-6 py-4 items-center justify-between">
           <div className="flex items-center gap-4">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-gray-800 rounded-lg">
               <Menu className="h-5 w-5 text-gray-400" />
@@ -740,13 +946,22 @@ Return ONLY valid JSON array:
           
           <div className="flex items-center gap-3">
             {activeCourse && view === 'course' && (
-              <button 
-                onClick={shareCourse}
+              <>
+                <button 
+                  onClick={() => setShowAddMaterials(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm transition-colors"
+                >
+                  <FileUp className="h-4 w-4" />
+                  Add Materials
+                </button>
+                <button 
+                  onClick={shareCourse}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm transition-colors"
               >
                 <Share2 className="h-4 w-4" />
                 Share
               </button>
+              </>
             )}
             
             <button 
@@ -760,13 +975,13 @@ Return ONLY valid JSON array:
         </header>
         
         {/* Content Area */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
           {/* HOME - Dashboard */}
           {view === 'home' && (
-            <div className="p-6 max-w-6xl mx-auto">
-              {/* Search & Filter */}
-              <div className="flex items-center gap-4 mb-8">
-                <div className="relative flex-1 max-w-md">
+            <div className="p-4 md:p-6 max-w-6xl mx-auto">
+              {/* Search & Filter - Mobile optimized */}
+              <div className="flex flex-col md:flex-row gap-3 md:gap-4 mb-6 md:mb-8">
+                <div className="relative flex-1">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
                   <input
                     type="text"
@@ -777,29 +992,33 @@ Return ONLY valid JSON array:
                   />
                 </div>
                 
-                <div className="flex gap-2">
-                  {['Math', 'Physics', 'Chemistry', 'Computer Science'].map(cat => (
-                    <button
-                      key={cat}
-                      onClick={() => setSelectedCategory(selectedCategory === cat ? 'all' : cat)}
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-all ${
-                        selectedCategory === cat ? 'bg-gray-700 text-white' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800'
-                      }`}
-                    >
-                      <span>{subjectStyles[cat]?.icon}</span>
-                      {cat}
-                    </button>
-                  ))}
+                {/* Horizontal scroll on mobile */}
+                <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">
+                  {['Math', 'Physics', 'Chemistry', 'CS'].map((cat, i) => {
+                    const fullCat = ['Math', 'Physics', 'Chemistry', 'Computer Science'][i]
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => setSelectedCategory(selectedCategory === fullCat ? 'all' : fullCat)}
+                        className={`flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-sm transition-all whitespace-nowrap shrink-0 ${
+                          selectedCategory === fullCat ? 'bg-gray-700 text-white' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800'
+                        }`}
+                      >
+                        <span>{subjectStyles[fullCat]?.icon}</span>
+                        <span className="md:inline">{cat}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
               
               {/* Upcoming Exams */}
               {courses.some(c => c.examDate) && (
-                <section className="mb-8">
-                  <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <section className="mb-6 md:mb-8">
+                  <h2 className="text-lg font-semibold mb-3 md:mb-4 flex items-center gap-2">
                     Upcoming <ChevronRight className="h-4 w-4 text-gray-500" />
                   </h2>
-                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                     {courses.filter(c => c.examDate && daysUntil(c.examDate) > 0).sort((a, b) => new Date(a.examDate) - new Date(b.examDate)).slice(0, 3).map(course => {
                       const style = getSubjectStyle(course.name)
                       const days = daysUntil(course.examDate)
@@ -838,62 +1057,66 @@ Return ONLY valid JSON array:
               
               {/* All Courses */}
               <section>
-                <h2 className="text-lg font-semibold mb-4">Your Courses</h2>
+                <h2 className="text-lg font-semibold mb-3 md:mb-4">Your Courses</h2>
                 {filteredCourses.length === 0 ? (
-                  <div className="text-center py-16 bg-gray-900/30 rounded-2xl border border-gray-800/50">
-                    <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                      <BookOpen className="h-8 w-8 text-gray-600" />
+                  <div className="text-center py-12 md:py-16 bg-gray-900/30 rounded-2xl border border-gray-800/50">
+                    <div className="w-14 h-14 md:w-16 md:h-16 bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <BookOpen className="h-7 w-7 md:h-8 md:w-8 text-gray-600" />
                     </div>
-                    <h3 className="text-lg font-medium mb-2">No courses yet</h3>
-                    <p className="text-gray-500 mb-6">Upload your study materials to get started</p>
+                    <h3 className="text-base md:text-lg font-medium mb-2">No courses yet</h3>
+                    <p className="text-gray-500 mb-6 text-sm md:text-base px-4">Upload your study materials to get started</p>
                     <button 
                       onClick={() => setShowNewCourse(true)}
-                      className="bg-primary-600 hover:bg-primary-500 px-6 py-3 rounded-xl font-medium inline-flex items-center gap-2"
+                      className="bg-primary-600 hover:bg-primary-500 active:scale-95 px-5 md:px-6 py-2.5 md:py-3 rounded-xl font-medium inline-flex items-center gap-2 transition-transform"
                     >
                       <Plus className="h-5 w-5" />
                       Create Your First Course
                     </button>
                   </div>
                 ) : (
-                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                     {filteredCourses.map(course => {
                       const style = getSubjectStyle(course.name)
                       return (
                         <div
                           key={course.id}
                           onClick={() => { setActiveCourse(course); setView(course.needsAssessment ? 'assessment' : 'course') }}
-                          className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5 cursor-pointer hover:border-gray-700 transition-all group relative"
+                          className="bg-gray-900/50 border border-gray-800 rounded-2xl p-4 md:p-5 cursor-pointer hover:border-gray-700 active:scale-[0.98] transition-all group relative"
                         >
                           <button
                             onClick={(e) => { e.stopPropagation(); deleteCourse(course.id) }}
-                            className="absolute top-4 right-4 p-1.5 hover:bg-red-500/20 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="absolute top-3 right-3 md:top-4 md:right-4 p-1.5 hover:bg-red-500/20 rounded-lg md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                           >
                             <X className="h-4 w-4 text-red-400" />
                           </button>
                           
-                          <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${style.color} flex items-center justify-center text-2xl mb-4`}>
-                            {style.icon}
+                          <div className="flex items-start gap-3 md:block">
+                            <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl bg-gradient-to-br ${style.color} flex items-center justify-center text-xl md:text-2xl md:mb-4 shrink-0`}>
+                              {style.icon}
+                            </div>
+                            
+                            <div className="flex-1 min-w-0 md:block">
+                              <h3 className="font-semibold mb-0.5 md:mb-1 group-hover:text-primary-400 transition-colors truncate">{course.name}</h3>
+                              <p className="text-sm text-gray-500 mb-2 md:mb-4">{course.lessons.length} lessons</p>
+                              
+                              {course.needsAssessment ? (
+                                <div className="flex items-center gap-2 text-amber-400 text-xs md:text-sm">
+                                  <Zap className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                  Take assessment
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-3">
+                                  <div className="flex-1 bg-gray-800 rounded-full h-1.5 md:h-2">
+                                    <div 
+                                      className={`h-1.5 md:h-2 rounded-full bg-gradient-to-r ${style.color}`} 
+                                      style={{ width: `${course.totalProgress}%` }} 
+                                    />
+                                  </div>
+                                  <span className="text-xs md:text-sm text-gray-400">{course.totalProgress}%</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          
-                          <h3 className="font-semibold mb-1 group-hover:text-primary-400 transition-colors">{course.name}</h3>
-                          <p className="text-sm text-gray-500 mb-4">{course.lessons.length} lessons</p>
-                          
-                          {course.needsAssessment ? (
-                            <div className="flex items-center gap-2 text-amber-400 text-sm">
-                              <Zap className="h-4 w-4" />
-                              Take assessment to start
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-3">
-                              <div className="flex-1 bg-gray-800 rounded-full h-2">
-                                <div 
-                                  className={`h-2 rounded-full bg-gradient-to-r ${style.color}`} 
-                                  style={{ width: `${course.totalProgress}%` }} 
-                                />
-                              </div>
-                              <span className="text-sm text-gray-400">{course.totalProgress}%</span>
-                            </div>
-                          )}
                           
                           {course.sharedFrom && (
                             <p className="text-xs text-gray-600 mt-3 flex items-center gap-1">
@@ -912,28 +1135,28 @@ Return ONLY valid JSON array:
           
           {/* ASSESSMENT */}
           {view === 'assessment' && activeCourse && (
-            <div className="max-w-2xl mx-auto p-6">
-              <div className="text-center mb-8">
-                <div className="w-16 h-16 bg-primary-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Brain className="h-8 w-8 text-primary-400" />
+            <div className="max-w-2xl mx-auto p-4 md:p-6">
+              <div className="text-center mb-6 md:mb-8">
+                <div className="w-14 h-14 md:w-16 md:h-16 bg-primary-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Brain className="h-7 w-7 md:h-8 md:w-8 text-primary-400" />
                 </div>
-                <h1 className="text-2xl font-bold mb-2">Let's See What You Know!</h1>
-                <p className="text-gray-400">Answer these questions so I can personalize your learning experience.</p>
+                <h1 className="text-xl md:text-2xl font-bold mb-2">Let's See What You Know!</h1>
+                <p className="text-gray-400 text-sm md:text-base px-4">Answer these questions so I can personalize your learning.</p>
               </div>
               
-              <div className="bg-gray-900/50 rounded-2xl border border-gray-800 p-6">
+              <div className="bg-gray-900/50 rounded-2xl border border-gray-800 p-4 md:p-6">
                 {isGenerating ? (
-                  <div className="text-center py-12">
-                    <Loader2 className="h-12 w-12 text-primary-500 animate-spin mx-auto mb-4" />
+                  <div className="text-center py-10 md:py-12">
+                    <Loader2 className="h-10 w-10 md:h-12 md:w-12 text-primary-500 animate-spin mx-auto mb-4" />
                     <p className="text-gray-400">Preparing your assessment...</p>
                   </div>
                 ) : questions.length > 0 ? (
                   <>
-                    <div className="flex items-center justify-between mb-6">
-                      <span className="text-sm text-gray-500">Question {currentQ + 1} of {questions.length}</span>
+                    <div className="flex items-center justify-between mb-4 md:mb-6">
+                      <span className="text-xs md:text-sm text-gray-500">Question {currentQ + 1} of {questions.length}</span>
                       <div className="flex gap-1">
                         {questions.map((_, i) => (
-                          <div key={i} className={`w-3 h-3 rounded-full transition-colors ${
+                          <div key={i} className={`w-2 h-2 md:w-3 md:h-3 rounded-full transition-colors ${
                             i < currentQ ? (answers[i]?.correct ? 'bg-green-500' : 'bg-red-500') : 
                             i === currentQ ? 'bg-primary-500' : 'bg-gray-700'
                           }`} />
@@ -941,19 +1164,19 @@ Return ONLY valid JSON array:
                       </div>
                     </div>
                     
-                    <div className="mb-6">
-                      <div className="text-lg text-gray-100">
+                    <div className="mb-4 md:mb-6">
+                      <div className="text-base md:text-lg text-gray-100">
                         <MarkdownRenderer content={questions[currentQ]?.question} />
                       </div>
                     </div>
                     
-                    <div className="space-y-3 mb-6">
+                    <div className="space-y-2 md:space-y-3 mb-4 md:mb-6">
                       {questions[currentQ]?.options.map((opt, i) => (
                         <button
                           key={i}
                           onClick={() => handleAssessmentAnswer(i)}
                           disabled={showExplanation}
-                          className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                          className={`w-full text-left p-3 md:p-4 rounded-xl border-2 transition-all active:scale-[0.98] ${
                             showExplanation
                               ? i === questions[currentQ].correct ? 'border-green-500 bg-green-500/10' : i === selectedAnswer ? 'border-red-500 bg-red-500/10' : 'border-gray-800'
                               : selectedAnswer === i ? 'border-primary-500 bg-primary-500/10' : 'border-gray-800 hover:border-gray-700'
@@ -965,8 +1188,8 @@ Return ONLY valid JSON array:
                     </div>
                     
                     {showExplanation && (
-                      <div className={`p-4 rounded-xl mb-6 ${answers[currentQ]?.correct ? 'bg-green-500/10 border border-green-500/30' : 'bg-amber-500/10 border border-amber-500/30'}`}>
-                        <p className={`font-medium mb-2 ${answers[currentQ]?.correct ? 'text-green-400' : 'text-amber-400'}`}>
+                      <div className={`p-3 md:p-4 rounded-xl mb-4 md:mb-6 ${answers[currentQ]?.correct ? 'bg-green-500/10 border border-green-500/30' : 'bg-amber-500/10 border border-amber-500/30'}`}>
+                        <p className={`font-medium mb-2 text-sm md:text-base ${answers[currentQ]?.correct ? 'text-green-400' : 'text-amber-400'}`}>
                           {answers[currentQ]?.correct ? '✓ Correct!' : '✗ Not quite'}
                         </p>
                         <MarkdownRenderer content={questions[currentQ]?.explanation} />
@@ -978,13 +1201,13 @@ Return ONLY valid JSON array:
                         <button 
                           onClick={submitAssessmentAnswer} 
                           disabled={selectedAnswer === null}
-                          className="flex-1 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 py-3 rounded-xl font-medium"
+                          className="flex-1 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 py-3 rounded-xl font-medium active:scale-[0.98] transition-transform"
                         >
                           Check Answer
                         </button>
                       ) : (
-                        <button onClick={nextAssessmentQuestion} className="flex-1 bg-primary-600 hover:bg-primary-500 py-3 rounded-xl font-medium flex items-center justify-center gap-2">
-                          {currentQ < questions.length - 1 ? 'Next Question' : 'See Results'} <ChevronRight className="h-5 w-5" />
+                        <button onClick={nextAssessmentQuestion} className="flex-1 bg-primary-600 hover:bg-primary-500 py-3 rounded-xl font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
+                          {currentQ < questions.length - 1 ? 'Next' : 'Results'} <ChevronRight className="h-5 w-5" />
                         </button>
                       )}
                     </div>
@@ -992,7 +1215,7 @@ Return ONLY valid JSON array:
                 ) : (
                   <button 
                     onClick={() => generateAssessment(activeCourse)}
-                    className="w-full bg-primary-600 hover:bg-primary-500 py-4 rounded-xl font-medium"
+                    className="w-full bg-primary-600 hover:bg-primary-500 py-4 rounded-xl font-medium active:scale-[0.98] transition-transform"
                   >
                     Start Assessment
                   </button>
@@ -1003,66 +1226,76 @@ Return ONLY valid JSON array:
           
           {/* COURSE VIEW */}
           {view === 'course' && activeCourse && (
-            <div className="p-6 max-w-4xl mx-auto">
+            <div className="p-4 md:p-6 max-w-4xl mx-auto">
               {/* Course Header */}
-              <div className="bg-gradient-to-br from-gray-900 to-gray-900/50 rounded-2xl p-6 border border-gray-800 mb-8">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${getSubjectStyle(activeCourse.name).color} flex items-center justify-center text-2xl`}>
+              <div className="bg-gradient-to-br from-gray-900 to-gray-900/50 rounded-2xl p-4 md:p-6 border border-gray-800 mb-6 md:mb-8">
+                <div className="flex items-start gap-3 md:gap-4 mb-4">
+                  <div className={`w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gradient-to-br ${getSubjectStyle(activeCourse.name).color} flex items-center justify-center text-xl md:text-2xl shrink-0`}>
                     {getSubjectStyle(activeCourse.name).icon}
                   </div>
-                  <div>
-                    <h1 className="text-2xl font-bold">{activeCourse.name}</h1>
-                    <p className="text-gray-400">{activeCourse.lessons.length} lessons · {activeCourse.lessons.filter(l => l.completed).length} completed</p>
+                  <div className="min-w-0">
+                    <h1 className="text-xl md:text-2xl font-bold truncate">{activeCourse.name}</h1>
+                    <p className="text-sm md:text-base text-gray-400">{activeCourse.lessons.length} lessons · {activeCourse.lessons.filter(l => l.completed).length} completed</p>
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-4 md:gap-6">
                   <div className="flex-1">
-                    <div className="flex items-center justify-between text-sm mb-2">
+                    <div className="flex items-center justify-between text-xs md:text-sm mb-2">
                       <span className="text-gray-400">Progress</span>
                       <span className="font-medium">{activeCourse.totalProgress}%</span>
                     </div>
-                    <div className="bg-gray-800 rounded-full h-3">
+                    <div className="bg-gray-800 rounded-full h-2 md:h-3">
                       <div 
-                        className={`h-3 rounded-full bg-gradient-to-r ${getSubjectStyle(activeCourse.name).color}`}
+                        className={`h-2 md:h-3 rounded-full bg-gradient-to-r ${getSubjectStyle(activeCourse.name).color}`}
                         style={{ width: `${activeCourse.totalProgress}%` }}
                       />
                     </div>
                   </div>
                   
                   {activeCourse.examDate && (
-                    <div className="text-center px-6 border-l border-gray-800">
-                      <p className="text-2xl font-bold text-amber-400">{daysUntil(activeCourse.examDate)}</p>
+                    <div className="text-center pl-4 md:px-6 border-l border-gray-800">
+                      <p className="text-xl md:text-2xl font-bold text-amber-400">{daysUntil(activeCourse.examDate)}</p>
                       <p className="text-xs text-gray-500">days left</p>
                     </div>
                   )}
                 </div>
+                
+                {/* Mobile: Add Materials Button */}
+                <button 
+                  onClick={() => setShowAddMaterials(true)}
+                  className="md:hidden w-full mt-4 flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm active:scale-[0.98] transition-transform"
+                >
+                  <FileUp className="h-4 w-4" />
+                  Add More Materials
+                </button>
               </div>
               
               {/* Lessons */}
-              <h2 className="text-lg font-semibold mb-4">Lessons</h2>
+              <h2 className="text-lg font-semibold mb-3 md:mb-4">Lessons</h2>
               <div className="space-y-3">
                 {activeCourse.lessons.map((lesson, idx) => (
                   <div
                     key={lesson.id}
-                    className="bg-gray-900/50 border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition-all"
+                    className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 md:p-5 hover:border-gray-700 active:scale-[0.99] transition-all"
                   >
-                    <div className="flex items-start gap-4">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                    <div className="flex items-start gap-3 md:gap-4">
+                      <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center shrink-0 ${
                         lesson.completed ? 'bg-green-500/20 text-green-400' : 
                         lesson.progress > 0 ? 'bg-primary-500/20 text-primary-400' : 
                         'bg-gray-800 text-gray-500'
                       }`}>
-                        {lesson.completed ? <Check className="h-6 w-6" /> : 
-                         lesson.progress > 0 ? <span className="font-bold text-sm">{lesson.progress}%</span> :
-                         <span className="font-bold text-lg">{idx + 1}</span>}
+                        {lesson.completed ? <Check className="h-5 w-5 md:h-6 md:w-6" /> : 
+                         lesson.progress > 0 ? <span className="font-bold text-xs md:text-sm">{lesson.progress}%</span> :
+                         <span className="font-bold text-base md:text-lg">{idx + 1}</span>}
                       </div>
                       
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium mb-1">{lesson.title}</h3>
-                        <p className="text-sm text-gray-500 mb-3">{lesson.description}</p>
+                        <h3 className="font-medium mb-0.5 md:mb-1 text-sm md:text-base">{lesson.title}</h3>
+                        <p className="text-xs md:text-sm text-gray-500 mb-2 md:mb-3 line-clamp-2">{lesson.description}</p>
                         
-                        <div className="flex flex-wrap gap-2 mb-4">
+                        {/* Key points - hidden on mobile to save space */}
+                        <div className="hidden md:flex flex-wrap gap-2 mb-4">
                           {lesson.keyPoints.slice(0, 3).map((p, i) => (
                             <span key={i} className="bg-gray-800/50 px-2 py-1 rounded text-xs text-gray-400">{p}</span>
                           ))}
@@ -1071,22 +1304,22 @@ Return ONLY valid JSON array:
                         <div className="flex gap-2">
                           <button 
                             onClick={() => startLesson(lesson)}
-                            className="bg-primary-600 hover:bg-primary-500 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
+                            className="bg-primary-600 hover:bg-primary-500 px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1.5 md:gap-2 active:scale-95 transition-transform"
                           >
-                            <Play className="h-4 w-4" />
-                            {lesson.progress > 0 ? 'Continue' : 'Start'} Learning
+                            <Play className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                            {lesson.progress > 0 ? 'Continue' : 'Learn'}
                           </button>
                           <button 
                             onClick={() => startQuiz(lesson)}
-                            className="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
+                            className="bg-gray-800 hover:bg-gray-700 px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1.5 md:gap-2 active:scale-95 transition-transform"
                           >
-                            <Brain className="h-4 w-4" />
+                            <Brain className="h-3.5 w-3.5 md:h-4 md:w-4" />
                             Quiz
                           </button>
                         </div>
                         
                         {lesson.quizScore !== null && (
-                          <p className="text-xs text-gray-500 mt-3">Last quiz: {lesson.quizScore}/5</p>
+                          <p className="text-xs text-gray-500 mt-2 md:mt-3">Last quiz: {lesson.quizScore}/5</p>
                         )}
                       </div>
                     </div>
@@ -1100,11 +1333,11 @@ Return ONLY valid JSON array:
           {view === 'lesson-step' && activeLesson && (
             <div className="flex flex-col h-full max-w-3xl mx-auto">
               {/* Lesson Header */}
-              <div className="p-4 border-b border-gray-800 bg-gray-900/50">
+              <div className="p-3 md:p-4 border-b border-gray-800 bg-gray-900/50">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="font-semibold">{activeLesson.title}</h2>
-                    <p className="text-sm text-gray-500">
+                  <div className="min-w-0 flex-1">
+                    <h2 className="font-semibold text-sm md:text-base truncate">{activeLesson.title}</h2>
+                    <p className="text-xs md:text-sm text-gray-500">
                       Step {currentStep + 1} of {lessonContent.length || '?'} · Learning Mode
                     </p>
                   </div>
@@ -1536,6 +1769,106 @@ Return ONLY valid JSON array:
           </div>
         </div>
       )}
+      
+      {/* Add Materials Modal */}
+      {showAddMaterials && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 z-50">
+          <div className="bg-gray-900 rounded-t-3xl md:rounded-2xl border-t md:border border-gray-800 w-full md:max-w-lg max-h-[90vh] overflow-hidden">
+            {/* Drag handle for mobile */}
+            <div className="md:hidden flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 bg-gray-700 rounded-full" />
+            </div>
+            
+            <div className="p-4 md:p-6 border-b border-gray-800">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg md:text-xl font-semibold flex items-center gap-2">
+                  <FileUp className="h-5 w-5 text-primary-400" />
+                  Add Materials
+                </h2>
+                <button onClick={() => setShowAddMaterials(false)} className="p-2 hover:bg-gray-800 rounded-lg">
+                  <X className="h-5 w-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-4 md:p-6">
+              <p className="text-gray-400 text-sm mb-4">
+                Add more study materials to <span className="text-white font-medium">{activeCourse?.name}</span>. 
+                New topics will be added as lessons, and existing topics will be expanded.
+              </p>
+              
+              <div
+                onClick={() => addMaterialRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-6 md:p-8 text-center cursor-pointer transition-all ${
+                  isProcessing ? 'border-primary-500 bg-primary-500/5' : 'border-gray-700 hover:border-primary-500 hover:bg-primary-500/5 active:scale-[0.98]'
+                }`}
+              >
+                {isProcessing ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="h-10 w-10 text-primary-500 animate-spin" />
+                    <p className="text-primary-400 text-sm">{processingStatus}</p>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="h-10 w-10 text-gray-500 mx-auto mb-3" />
+                    <p className="text-gray-300 mb-1">Tap to upload files</p>
+                    <p className="text-xs text-gray-600">PDF, Images, or Text files</p>
+                  </>
+                )}
+              </div>
+              <input 
+                ref={addMaterialRef} 
+                type="file" 
+                multiple 
+                accept=".pdf,.png,.jpg,.jpeg,.txt,.md" 
+                onChange={handleAddMaterials} 
+                className="hidden" 
+              />
+              
+              <div className="mt-4 p-3 bg-gray-800/50 rounded-xl">
+                <p className="text-xs text-gray-400">
+                  <Sparkles className="h-3.5 w-3.5 inline mr-1 text-primary-400" />
+                  AI will analyze your materials and automatically update your course structure.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Mobile Bottom Navigation */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f0f15]/95 backdrop-blur-xl border-t border-gray-800/50 px-4 py-2 safe-area-bottom z-40">
+        <div className="flex items-center justify-around max-w-md mx-auto">
+          <button
+            onClick={() => { setView('home'); setActiveCourse(null) }}
+            className={`flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-colors ${
+              view === 'home' ? 'text-primary-400' : 'text-gray-500'
+            }`}
+          >
+            <Home className="h-5 w-5" />
+            <span className="text-xs">Home</span>
+          </button>
+          
+          <button
+            onClick={() => setShowNewCourse(true)}
+            className="flex flex-col items-center gap-1 py-2 px-4 -mt-4"
+          >
+            <div className="bg-primary-600 p-3 rounded-xl shadow-lg shadow-primary-500/30">
+              <Plus className="h-5 w-5" />
+            </div>
+          </button>
+          
+          <button
+            onClick={() => {}}
+            className="flex flex-col items-center gap-1 py-2 px-4 rounded-xl text-gray-500"
+          >
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white">
+              {user?.email?.[0].toUpperCase() || 'U'}
+            </div>
+            <span className="text-xs">Profile</span>
+          </button>
+        </div>
+      </nav>
     </div>
   )
 }
