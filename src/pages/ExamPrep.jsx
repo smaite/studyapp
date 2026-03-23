@@ -420,7 +420,7 @@ Return ONLY valid JSON.`
     }
   }
 
-  const generateAssessment = async (course) => {
+  const generateAssessment = async (course, retryCount = 0) => {
     setIsGenerating(true)
     setQuestions([])
     setCurrentQ(0)
@@ -450,6 +450,8 @@ Return ONLY valid JSON array (no other text):
       json = json.replace(/,(\s*[\]}])/g, '$1')
       
       const parsed = JSON.parse(json)
+      if (!parsed || parsed.length === 0) throw new Error('No questions generated')
+      
       setQuestions(parsed.slice(0, 10).map(q => ({
         ...q,
         options: q.options || ['A', 'B', 'C', 'D'],
@@ -457,15 +459,42 @@ Return ONLY valid JSON array (no other text):
       })))
     } catch (error) {
       console.error('Assessment error:', error)
-      // Generate fallback questions
-      setQuestions([{
-        question: 'Ready to start your assessment?',
-        options: ['Yes, let\'s begin!', 'Show me the course first', 'I need help', 'Skip assessment'],
-        correct: 0,
-        explanation: 'Great! Let\'s test your knowledge.',
-        topic: 'General',
-        difficulty: 'easy'
-      }])
+      
+      // Retry up to 2 times
+      if (retryCount < 2) {
+        console.log('Retrying assessment generation...')
+        return generateAssessment(course, retryCount + 1)
+      }
+      
+      // Generate simple fallback questions based on lessons
+      const fallbackQuestions = course.lessons.slice(0, 5).map((lesson, idx) => ({
+        question: `How familiar are you with "${lesson.title}"?`,
+        options: [
+          'I know this very well',
+          'I have some knowledge',
+          'I\'ve heard of it but don\'t understand',
+          'This is completely new to me'
+        ],
+        correct: 0, // Any answer is acceptable for self-assessment
+        explanation: `Got it! I'll adjust the ${lesson.title} lessons based on your level.`,
+        topic: lesson.title,
+        difficulty: 'easy',
+        isSelfAssessment: true
+      }))
+      
+      if (fallbackQuestions.length === 0) {
+        fallbackQuestions.push({
+          question: 'How would you rate your overall knowledge of this subject?',
+          options: ['Expert - I know most of this', 'Intermediate - I know some', 'Beginner - I\'m just starting', 'Complete beginner - Teach me everything'],
+          correct: 0,
+          explanation: 'Perfect! I\'ll tailor the course to your level.',
+          topic: 'General',
+          difficulty: 'easy',
+          isSelfAssessment: true
+        })
+      }
+      
+      setQuestions(fallbackQuestions)
     } finally {
       setIsGenerating(false)
     }
@@ -478,11 +507,27 @@ Return ONLY valid JSON array (no other text):
 
   const submitAssessmentAnswer = () => {
     if (selectedAnswer === null) return
+    
+    const currentQuestion = questions[currentQ]
+    const isSelfAssessment = currentQuestion.isSelfAssessment
+    
+    // For self-assessment questions, map answer to knowledge level
+    let isCorrect = selectedAnswer === currentQuestion.correct
+    let knowledgeFromAnswer = 50
+    
+    if (isSelfAssessment) {
+      // 0 = "I know very well" (100%), 1 = "Some knowledge" (70%), 2 = "Heard of it" (40%), 3 = "New to me" (10%)
+      knowledgeFromAnswer = [100, 70, 40, 10][selectedAnswer] || 50
+      isCorrect = true // Self-assessment is always "correct"
+    }
+    
     setAnswers([...answers, { 
       selected: selectedAnswer, 
-      correct: selectedAnswer === questions[currentQ].correct,
-      topic: questions[currentQ].topic,
-      difficulty: questions[currentQ].difficulty
+      correct: isCorrect,
+      topic: currentQuestion.topic,
+      difficulty: currentQuestion.difficulty,
+      isSelfAssessment,
+      knowledgeFromAnswer
     }])
     setShowExplanation(true)
   }
@@ -494,16 +539,35 @@ Return ONLY valid JSON array (no other text):
       setShowExplanation(false)
     } else {
       // Assessment complete - calculate results
-      const results = calculateAssessmentResults()
+      const allAnswers = [...answers, { 
+        selected: selectedAnswer, 
+        correct: questions[currentQ].isSelfAssessment || selectedAnswer === questions[currentQ].correct,
+        topic: questions[currentQ].topic,
+        difficulty: questions[currentQ].difficulty,
+        isSelfAssessment: questions[currentQ].isSelfAssessment,
+        knowledgeFromAnswer: questions[currentQ].isSelfAssessment 
+          ? [100, 70, 40, 10][selectedAnswer] || 50 
+          : null
+      }]
+      
+      const results = calculateAssessmentResults(allAnswers)
       setAssessmentResults(results)
       
       // Update course with knowledge levels
       const updated = { ...activeCourse, needsAssessment: false }
       updated.lessons = updated.lessons.map(lesson => {
-        const topicAnswers = answers.filter(a => 
+        const topicAnswers = allAnswers.filter(a => 
           a.topic?.toLowerCase().includes(lesson.title.toLowerCase()) ||
           lesson.title.toLowerCase().includes(a.topic?.toLowerCase() || '')
         )
+        
+        // If self-assessment, use the knowledge level from answer
+        const selfAssessAnswer = topicAnswers.find(a => a.isSelfAssessment)
+        if (selfAssessAnswer && selfAssessAnswer.knowledgeFromAnswer !== null) {
+          return { ...lesson, knowledgeLevel: selfAssessAnswer.knowledgeFromAnswer }
+        }
+        
+        // Otherwise calculate from correct/incorrect
         const correct = topicAnswers.filter(a => a.correct).length
         const total = topicAnswers.length || 1
         return {
@@ -518,18 +582,31 @@ Return ONLY valid JSON array (no other text):
     }
   }
 
-  const calculateAssessmentResults = () => {
+  const calculateAssessmentResults = (allAnswers = answers) => {
     const total = questions.length
-    const correct = answers.filter(a => a.correct).length
-    const percentage = Math.round((correct / total) * 100)
+    const hasSelfAssessment = allAnswers.some(a => a.isSelfAssessment)
+    
+    let percentage, correct
+    if (hasSelfAssessment) {
+      // Average knowledge from self-assessment
+      const knowledgeLevels = allAnswers.filter(a => a.knowledgeFromAnswer !== null).map(a => a.knowledgeFromAnswer)
+      percentage = knowledgeLevels.length > 0 
+        ? Math.round(knowledgeLevels.reduce((s, k) => s + k, 0) / knowledgeLevels.length)
+        : 50
+      correct = Math.round((percentage / 100) * total)
+    } else {
+      correct = allAnswers.filter(a => a.correct).length
+      percentage = Math.round((correct / total) * 100)
+    }
     
     // Group by topic
     const byTopic = {}
-    answers.forEach((a, i) => {
+    allAnswers.forEach((a, i) => {
       const topic = questions[i]?.topic || 'General'
-      if (!byTopic[topic]) byTopic[topic] = { correct: 0, total: 0 }
+      if (!byTopic[topic]) byTopic[topic] = { correct: 0, total: 0, knowledge: null }
       byTopic[topic].total++
       if (a.correct) byTopic[topic].correct++
+      if (a.knowledgeFromAnswer !== null) byTopic[topic].knowledge = a.knowledgeFromAnswer
     })
     
     // Determine skill level
