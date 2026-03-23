@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { GraduationCap, Menu, X, BookOpen, MessageSquare, ClipboardList, Sparkles, LogOut, User } from 'lucide-react'
+import { GraduationCap, Menu, X, BookOpen, MessageSquare, ClipboardList, Sparkles, LogOut, User, Calculator } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Navbar() {
@@ -14,6 +14,7 @@ export default function Navbar() {
     { path: '/subjects', label: 'Subjects', icon: BookOpen },
     { path: '/tutor', label: 'AI Tutor', icon: MessageSquare },
     { path: '/exam-prep', label: 'Study Hub', icon: ClipboardList },
+    { path: '/math-solver', label: 'Math Solver', icon: Calculator },
   ]
 
   const isActive = (path) => location.pathname === path
