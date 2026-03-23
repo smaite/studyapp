@@ -255,17 +255,18 @@ export default function ExamPrep() {
       setProcessingStatus('Creating your personalized course...')
       
       const lessonsPrompt = `Analyze this study material and create a detailed course outline.
+IMPORTANT: Generate ALL content in ${courseLanguage} language.
 
 Material:
 ${allContent.substring(0, 15000)}
 
 Create lessons that cover ALL topics in the material. For each lesson:
-1. Give a clear, specific title
-2. Write a 1-2 sentence description
-3. List 4-6 key concepts/points to cover
+1. Give a clear, specific title (in ${courseLanguage})
+2. Write a 1-2 sentence description (in ${courseLanguage})
+3. List 4-6 key concepts/points to cover (in ${courseLanguage})
 
 Return ONLY valid JSON array:
-[{"id":1,"title":"Topic Name","description":"What this covers","keyPoints":["Concept 1","Concept 2","Concept 3","Concept 4"]}]`
+[{"id":1,"title":"Topic Name in ${courseLanguage}","description":"What this covers in ${courseLanguage}","keyPoints":["Concept 1","Concept 2","Concept 3","Concept 4"]}]`
 
       const lessonsResponse = await sendMessage([{ role: 'user', content: lessonsPrompt }], subjectName)
       
@@ -286,6 +287,7 @@ Return ONLY valid JSON array:
       const newCourse = {
         id: Date.now(),
         name: subjectName,
+        language: courseLanguage,
         examDate: examDate || null,
         content: allContent,
         lessons,
@@ -297,6 +299,7 @@ Return ONLY valid JSON array:
       setCourses(prev => [...prev, newCourse])
       setSubjectName('')
       setExamDate('')
+      setCourseLanguage('English')
       setShowNewCourse(false)
       setActiveCourse(newCourse)
       
