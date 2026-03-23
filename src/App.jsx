@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useState, createContext } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Navbar from './components/Navbar'
@@ -16,6 +16,7 @@ export const AppContext = createContext()
 // Protected Route wrapper
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
+  const location = useLocation()
   
   if (loading) {
     return (
@@ -26,7 +27,8 @@ function ProtectedRoute({ children }) {
   }
   
   if (!user) {
-    return <Navigate to="/login" />
+    // Save the current URL to redirect back after login
+    return <Navigate to="/login" state={{ from: location.pathname + location.search }} />
   }
   
   return children

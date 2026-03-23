@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { Mail, Lock, User, Loader2, Eye, EyeOff, GraduationCap, Sparkles } from 'lucide-react'
 
@@ -12,6 +12,10 @@ export default function Login() {
   
   const { signIn, signInWithGoogle } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  
+  // Get the redirect URL from state, or default to home
+  const from = location.state?.from || '/'
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -21,7 +25,7 @@ export default function Login() {
     try {
       const { error } = await signIn(email, password)
       if (error) throw error
-      navigate('/')
+      navigate(from, { replace: true })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -32,6 +36,8 @@ export default function Login() {
   const handleGoogleSignIn = async () => {
     setError('')
     try {
+      // Store redirect URL in localStorage for OAuth callback
+      localStorage.setItem('authRedirect', from)
       const { error } = await signInWithGoogle()
       if (error) throw error
     } catch (err) {

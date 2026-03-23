@@ -14,11 +14,34 @@ export function AuthProvider({ children }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       setLoading(false)
+      
+      // Check for OAuth redirect
+      if (session?.user) {
+        const redirectUrl = localStorage.getItem('authRedirect')
+        if (redirectUrl && redirectUrl !== '/') {
+          localStorage.removeItem('authRedirect')
+          // Small delay to ensure React Router is ready
+          setTimeout(() => {
+            window.location.href = redirectUrl
+          }, 100)
+        }
+      }
     })
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null)
+      
+      // Handle OAuth sign in
+      if (event === 'SIGNED_IN' && session?.user) {
+        const redirectUrl = localStorage.getItem('authRedirect')
+        if (redirectUrl && redirectUrl !== '/') {
+          localStorage.removeItem('authRedirect')
+          setTimeout(() => {
+            window.location.href = redirectUrl
+          }, 100)
+        }
+      }
     })
 
     return () => subscription.unsubscribe()
