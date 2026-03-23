@@ -22,16 +22,16 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
 
 const STORAGE_KEY = 'studyai_courses'
 
-// Subject icons/colors
+// Subject icons/colors - updated with new color palette
 const subjectStyles = {
-  Math: { icon: '📐', color: 'from-blue-500 to-cyan-500' },
-  Physics: { icon: '⚛️', color: 'from-purple-500 to-pink-500' },
-  Chemistry: { icon: '🧪', color: 'from-green-500 to-emerald-500' },
-  Biology: { icon: '🧬', color: 'from-red-500 to-orange-500' },
-  'Computer Science': { icon: '💻', color: 'from-indigo-500 to-purple-500' },
-  History: { icon: '📜', color: 'from-amber-500 to-yellow-500' },
-  English: { icon: '📚', color: 'from-teal-500 to-cyan-500' },
-  default: { icon: '📖', color: 'from-primary-500 to-indigo-500' }
+  Math: { icon: '📐', color: 'from-primary-500 to-primary-400', accent: 'bg-primary-500/20 text-primary-400' },
+  Physics: { icon: '⚛️', color: 'from-violet-500 to-purple-400', accent: 'bg-violet-500/20 text-violet-400' },
+  Chemistry: { icon: '🧪', color: 'from-success-500 to-success-400', accent: 'bg-success-500/20 text-success-400' },
+  Biology: { icon: '🧬', color: 'from-rose-500 to-orange-400', accent: 'bg-rose-500/20 text-rose-400' },
+  'Computer Science': { icon: '💻', color: 'from-indigo-500 to-blue-400', accent: 'bg-indigo-500/20 text-indigo-400' },
+  History: { icon: '📜', color: 'from-amber-500 to-yellow-400', accent: 'bg-amber-500/20 text-amber-400' },
+  English: { icon: '📚', color: 'from-teal-500 to-cyan-400', accent: 'bg-teal-500/20 text-teal-400' },
+  default: { icon: '📖', color: 'from-primary-500 to-success-400', accent: 'bg-primary-500/20 text-primary-400' }
 }
 
 // Check if mobile
