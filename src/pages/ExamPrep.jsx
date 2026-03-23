@@ -109,6 +109,10 @@ export default function ExamPrep() {
   const chatFileInputRef = useRef(null)
   const [chatImage, setChatImage] = useState(null)
   
+  // Replan modal
+  const [showReplanModal, setShowReplanModal] = useState(false)
+  const [replanLanguage, setReplanLanguage] = useState(activeCourse?.language || 'English')
+  
   // Share modal
   const [showShareModal, setShowShareModal] = useState(false)
   const [shareLink, setShareLink] = useState('')
@@ -1530,47 +1534,68 @@ Problem: ${chatInput}`
           {view === 'course' && activeCourse && (
             <div className="p-4 md:p-6 max-w-4xl mx-auto">
               {/* Course Header */}
-              <div className="bg-gradient-to-br from-gray-900 to-gray-900/50 rounded-2xl p-4 md:p-6 border border-gray-800 mb-6 md:mb-8">
+              <div className="bg-surface-800/60 rounded-2xl p-4 md:p-6 border border-white/5 mb-6 md:mb-8">
                 <div className="flex items-start gap-3 md:gap-4 mb-4">
-                  <div className={`w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gradient-to-br ${getSubjectStyle(activeCourse.name).color} flex items-center justify-center text-xl md:text-2xl shrink-0`}>
+                  <div className={`w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gradient-to-br ${getSubjectStyle(activeCourse.name).color} flex items-center justify-center text-xl md:text-2xl shrink-0 shadow-lg`}>
                     {getSubjectStyle(activeCourse.name).icon}
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <h1 className="text-xl md:text-2xl font-bold truncate">{activeCourse.name}</h1>
                     <p className="text-sm md:text-base text-gray-400">{activeCourse.lessons.length} lessons · {activeCourse.lessons.filter(l => l.completed).length} completed</p>
+                    {activeCourse.language && (
+                      <p className="text-xs text-gray-500 mt-1">Language: {activeCourse.language}</p>
+                    )}
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-4 md:gap-6">
+                <div className="flex items-center gap-4 md:gap-6 mb-4">
                   <div className="flex-1">
                     <div className="flex items-center justify-between text-xs md:text-sm mb-2">
                       <span className="text-gray-400">Progress</span>
                       <span className="font-medium">{activeCourse.totalProgress}%</span>
                     </div>
-                    <div className="bg-gray-800 rounded-full h-2 md:h-3">
+                    <div className="bg-surface-700 rounded-full h-2 md:h-3 overflow-hidden">
                       <div 
-                        className={`h-2 md:h-3 rounded-full bg-gradient-to-r ${getSubjectStyle(activeCourse.name).color}`}
+                        className={`h-full rounded-full bg-gradient-to-r ${getSubjectStyle(activeCourse.name).color} transition-all duration-500`}
                         style={{ width: `${activeCourse.totalProgress}%` }}
                       />
                     </div>
                   </div>
                   
                   {activeCourse.examDate && (
-                    <div className="text-center pl-4 md:px-6 border-l border-gray-800">
+                    <div className="text-center pl-4 md:px-6 border-l border-white/5">
                       <p className="text-xl md:text-2xl font-bold text-amber-400">{daysUntil(activeCourse.examDate)}</p>
                       <p className="text-xs text-gray-500">days left</p>
                     </div>
                   )}
                 </div>
                 
-                {/* Mobile: Add Materials Button */}
-                <button 
-                  onClick={() => setShowAddMaterials(true)}
-                  className="md:hidden w-full mt-4 flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm active:scale-[0.98] transition-transform"
-                >
-                  <FileUp className="h-4 w-4" />
-                  Add More Materials
-                </button>
+                {/* Action Buttons */}
+                <div className="grid grid-cols-2 md:flex gap-2 md:gap-3">
+                  <button 
+                    onClick={() => setShowAddMaterials(true)}
+                    className="flex items-center justify-center md:justify-start gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-xs md:text-sm active:scale-[0.98] transition-all cursor-pointer border border-white/5"
+                  >
+                    <FileUp className="h-4 w-4" />
+                    <span className="hidden md:inline">Add Materials</span>
+                  </button>
+                  
+                  <button 
+                    onClick={() => setShowReplanModal(true)}
+                    className="flex items-center justify-center md:justify-start gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-xs md:text-sm active:scale-[0.98] transition-all cursor-pointer border border-white/5"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    <span className="hidden md:inline">Replan</span>
+                  </button>
+                  
+                  <button 
+                    onClick={shareCourse}
+                    className="flex items-center justify-center md:justify-start gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-xs md:text-sm active:scale-[0.98] transition-all cursor-pointer border border-white/5 md:col-auto"
+                  >
+                    <Share2 className="h-4 w-4" />
+                    <span className="hidden md:inline">Share</span>
+                  </button>
+                </div>
               </div>
               
               {/* Lessons */}
@@ -2224,17 +2249,82 @@ Problem: ${chatInput}`
         </div>
       )}
       
+      {/* Replan Modal */}
+      {showReplanModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-surface-800 rounded-2xl border border-white/5 w-full max-w-md">
+            <div className="p-6 border-b border-white/5">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <RotateCcw className="h-5 w-5 text-primary-400" />
+                  Replan Course
+                </h2>
+                <button onClick={() => setShowReplanModal(false)} className="p-2 hover:bg-white/5 rounded-xl transition-colors">
+                  <X className="h-5 w-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <p className="text-gray-400 text-sm">
+                Regenerate all lessons to ensure they're in a single language. This will reset your progress.
+              </p>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Select Language</label>
+                <select
+                  value={replanLanguage}
+                  onChange={(e) => setReplanLanguage(e.target.value)}
+                  className="w-full bg-surface-700 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all cursor-pointer"
+                >
+                  {languages.map(lang => (
+                    <option key={lang.code} value={lang.name}>
+                      {lang.native} ({lang.name})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
+                <p className="text-xs text-amber-300">
+                  ⚠️ All lessons will be regenerated in <strong>{replanLanguage}</strong> with pure content (no language mixing). Progress will be reset.
+                </p>
+              </div>
+              
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowReplanModal(false)}
+                  className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 rounded-xl font-medium transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    replanCourse(replanLanguage)
+                    setShowReplanModal(false)
+                  }}
+                  disabled={isProcessing}
+                  className="flex-1 px-4 py-2.5 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 rounded-xl font-medium transition-colors cursor-pointer"
+                >
+                  {isProcessing ? 'Processing...' : 'Regenerate'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Share Modal */}
       {showShareModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-900 rounded-2xl border border-gray-800 w-full max-w-md">
-            <div className="p-6 border-b border-gray-800">
+          <div className="bg-surface-800 rounded-2xl border border-white/5 w-full max-w-md">
+            <div className="p-6 border-b border-white/5">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold flex items-center gap-2">
                   <Share2 className="h-5 w-5 text-primary-400" />
                   Share Course
                 </h2>
-                <button onClick={() => setShowShareModal(false)} className="p-2 hover:bg-gray-800 rounded-lg">
+                <button onClick={() => setShowShareModal(false)} className="p-2 hover:bg-white/5 rounded-xl transition-colors">
                   <X className="h-5 w-5 text-gray-400" />
                 </button>
               </div>
