@@ -461,7 +461,8 @@ Return ONLY valid JSON.`
     setShowExplanation(false)
     
     try {
-      const prompt = `Create 10 assessment questions to test the student's existing knowledge of this material. 
+      const prompt = `Create 10 assessment questions to test the student's existing knowledge of this material.
+IMPORTANT: Generate ALL content in ${course.language || 'English'} language.
 Mix easy, medium, and hard questions covering different topics.
 
 Material: ${course.content.substring(0, 8000)}
@@ -666,24 +667,25 @@ Return ONLY valid JSON array (no other text):
     try {
       // Generate lesson content with steps
       const prompt = `Create a structured lesson on "${lesson.title}" for a student at ${lesson.knowledgeLevel >= 70 ? 'advanced' : lesson.knowledgeLevel >= 40 ? 'intermediate' : 'beginner'} level.
+IMPORTANT: Generate ALL content in ${activeCourse.language || 'English'} language.
 
 Key concepts to cover: ${lesson.keyPoints.join(', ')}
 Course material: ${activeCourse.content.substring(0, 5000)}
 
 Create 4-5 teaching steps. Each step should:
-1. Explain ONE concept clearly with examples
+1. Explain ONE concept clearly with examples (in ${activeCourse.language || 'English'})
 2. Use real-world analogies
 3. Include a mini check-in question
 
 Return JSON array:
 [{
-  "title": "Step title",
-  "content": "Detailed explanation with emojis, examples. Use $...$ for math.",
+  "title": "Step title in ${activeCourse.language}",
+  "content": "Detailed explanation with examples. Use $...$ for math.",
   "checkQuestion": "A question to verify understanding",
   "checkAnswer": "The expected answer or concept"
 }]
 
-Be friendly, use emojis 🎯, and make it engaging!`
+Be friendly and make it engaging!`
 
       const response = await sendMessage([{ role: 'user', content: prompt }], activeCourse.name)
       
@@ -778,6 +780,7 @@ Be encouraging and use emojis!`
     
     try {
       const prompt = `Create 5 quiz questions about "${lesson.title}".
+IMPORTANT: Generate ALL content in ${activeCourse.language || 'English'} language.
 
 Key concepts: ${lesson.keyPoints.join(', ')}
 Material: ${activeCourse.content.substring(0, 6000)}
@@ -938,13 +941,15 @@ Return ONLY valid JSON array:
 
       if (isMathProblem && (chatImage || /solve|calculate|find|compute|evaluate|simplify/i.test(chatInput))) {
         const mathPrompt = `You are an expert math tutor. Solve this problem step by step.
+IMPORTANT: Respond in ${activeCourse?.language || 'English'} language.
+
 Format your response as JSON:
 {
-  "steps": [{"description": "Step description", "math": "LaTeX math", "explanation": "Why"}],
+  "steps": [{"description": "Step description in ${activeCourse?.language || 'English'}", "math": "LaTeX math", "explanation": "Why"}],
   "solution": "Final answer",
-  "tip": {"title": "Pro tip", "content": "Helpful insight"},
-  "fullExplanation": "Friendly explanation",
-  "followUpQuestions": ["Q1?", "Q2?", "Q3?"]
+  "tip": {"title": "Pro tip", "content": "Helpful insight in ${activeCourse?.language || 'English'}"},
+  "fullExplanation": "Friendly explanation in ${activeCourse?.language || 'English'}",
+  "followUpQuestions": ["Q1 in ${activeCourse?.language}?", "Q2 in ${activeCourse?.language}?", "Q3 in ${activeCourse?.language}?"]
 }
 Problem: ${chatInput}`
 
@@ -964,10 +969,14 @@ Problem: ${chatInput}`
           }
         } catch (e) { /* not JSON */ }
       } else if (chatImage) {
-        response = await analyzeImage(chatImage, chatInput, 'General')
+        const imgPrompt = activeCourse ? `${chatInput}\n\nRespond in ${activeCourse.language || 'English'} language.` : chatInput
+        response = await analyzeImage(chatImage, imgPrompt, 'General')
       } else {
         const apiMsgs = chatMessages.slice(-10).map(m => ({ role: m.role, content: m.content }))
-        apiMsgs.push({ role: 'user', content: chatInput })
+        const userMsg = activeCourse 
+          ? { role: 'user', content: `${chatInput}\n\nRespond in ${activeCourse.language || 'English'} language.` }
+          : { role: 'user', content: chatInput }
+        apiMsgs.push(userMsg)
         response = await sendMessage(apiMsgs, 'AI Tutor')
       }
 
@@ -2067,11 +2076,11 @@ Problem: ${chatInput}`
       {/* New Course Modal */}
       {showNewCourse && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-900 rounded-2xl border border-gray-800 w-full max-w-lg">
-            <div className="p-6 border-b border-gray-800">
+          <div className="bg-surface-800 rounded-2xl border border-white/5 w-full max-w-lg">
+            <div className="p-6 border-b border-white/5">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">Create New Course</h2>
-                <button onClick={() => setShowNewCourse(false)} className="p-2 hover:bg-gray-800 rounded-lg">
+                <button onClick={() => { setShowNewCourse(false); setCourseLanguage('English') }} className="p-2 hover:bg-white/5 rounded-xl transition-colors">
                   <X className="h-5 w-5 text-gray-400" />
                 </button>
               </div>
@@ -2085,8 +2094,24 @@ Problem: ${chatInput}`
                   value={subjectName}
                   onChange={(e) => setSubjectName(e.target.value)}
                   placeholder="e.g., Physics, Calculus, Chemistry"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500"
+                  className="w-full bg-surface-800 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
                 />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Language *</label>
+                <select
+                  value={courseLanguage}
+                  onChange={(e) => setCourseLanguage(e.target.value)}
+                  className="w-full bg-surface-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all cursor-pointer"
+                >
+                  {languages.map(lang => (
+                    <option key={lang.code} value={lang.name}>
+                      {lang.native} ({lang.name})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">All lessons, quizzes, and AI responses will be in {courseLanguage}</p>
               </div>
               
               <div>
@@ -2095,7 +2120,7 @@ Problem: ${chatInput}`
                   type="date"
                   value={examDate}
                   onChange={(e) => setExamDate(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500"
+                  className="w-full bg-surface-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
                 />
               </div>
               
@@ -2104,7 +2129,7 @@ Problem: ${chatInput}`
                 <div
                   onClick={() => subjectName.trim() && fileInputRef.current?.click()}
                   className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-                    subjectName.trim() ? 'border-gray-700 hover:border-primary-500 hover:bg-primary-500/5' : 'border-gray-800 opacity-50 cursor-not-allowed'
+                    subjectName.trim() ? 'border-primary-500/30 hover:border-primary-500 hover:bg-primary-500/5' : 'border-white/10 opacity-50 cursor-not-allowed'
                   }`}
                 >
                   {isProcessing ? (
@@ -2115,8 +2140,8 @@ Problem: ${chatInput}`
                   ) : (
                     <>
                       <Upload className="h-10 w-10 text-gray-500 mx-auto mb-3" />
-                      <p className="text-gray-400 mb-1">{subjectName.trim() ? 'Click to upload files' : 'Enter subject name first'}</p>
-                      <p className="text-xs text-gray-600">PDF, Images, or Text files</p>
+                      <p className="text-gray-300 mb-1">{subjectName.trim() ? 'Click to upload files' : 'Enter subject name first'}</p>
+                      <p className="text-xs text-gray-500">PDF, Images, or Text files</p>
                     </>
                   )}
                 </div>
