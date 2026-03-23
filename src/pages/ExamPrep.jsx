@@ -1,911 +1,1541 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { 
-  Calendar, Clock, BookOpen, Target, Plus, Trash2, 
-  Loader2, CheckCircle, FileText, Sparkles, Upload, 
-  File, Image, X, FileUp, GraduationCap, Brain
+  Upload, FileText, X, Loader2, CheckCircle, 
+  Brain, Sparkles, Send, Bot, User, BookOpen, Target,
+  ChevronRight, ChevronLeft, RotateCcw, Trophy, GraduationCap,
+  Play, Lock, Check, PenTool, MessageSquare, Plus,
+  Layers, Clock, BarChart3, HelpCircle, Search, Share2,
+  Home, Calendar, History, Settings, Copy, Users, Link2,
+  ArrowRight, Zap, Star, Menu, ChevronDown
 } from 'lucide-react'
-import { generateStudyPlan, generatePracticeQuestions, analyzeDocument, sendMessage } from '../services/aiService'
+import { sendMessage, analyzeImage } from '../services/aiService'
 import MarkdownRenderer from '../components/MarkdownRenderer'
+import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
-// Set up PDF.js worker using bundled version
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
 
-const levelOptions = [
-  'Beginner',
-  'Intermediate', 
-  'Advanced',
-  'Exam Ready'
-]
+const STORAGE_KEY = 'studyai_courses'
 
-const difficultyOptions = [
-  'Easy',
-  'Medium',
-  'Hard',
-  'Challenge'
-]
+// Subject icons/colors
+const subjectStyles = {
+  Math: { icon: '📐', color: 'from-blue-500 to-cyan-500' },
+  Physics: { icon: '⚛️', color: 'from-purple-500 to-pink-500' },
+  Chemistry: { icon: '🧪', color: 'from-green-500 to-emerald-500' },
+  Biology: { icon: '🧬', color: 'from-red-500 to-orange-500' },
+  'Computer Science': { icon: '💻', color: 'from-indigo-500 to-purple-500' },
+  History: { icon: '📜', color: 'from-amber-500 to-yellow-500' },
+  English: { icon: '📚', color: 'from-teal-500 to-cyan-500' },
+  default: { icon: '📖', color: 'from-primary-500 to-indigo-500' }
+}
 
 export default function ExamPrep() {
-  const [activeTab, setActiveTab] = useState('materials')
-  const [subject, setSubject] = useState('')
+  const { user, signOut } = useAuth()
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  
+  // Views: home, course, assessment, lesson-step, quiz, results, chat
+  const [view, setView] = useState('home')
+  const [courses, setCourses] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
+  
+  const [activeCourse, setActiveCourse] = useState(null)
+  const [activeLesson, setActiveLesson] = useState(null)
+  const [currentStep, setCurrentStep] = useState(0) // For lesson steps
+  
+  // New course modal
+  const [showNewCourse, setShowNewCourse] = useState(false)
+  const [subjectName, setSubjectName] = useState('')
   const [examDate, setExamDate] = useState('')
-  const [topics, setTopics] = useState([''])
-  const [currentLevel, setCurrentLevel] = useState('Intermediate')
-  const [studyPlan, setStudyPlan] = useState('')
-  const [isGenerating, setIsGenerating] = useState(false)
-
-  // Practice Questions State
-  const [practiceSubject, setPracticeSubject] = useState('')
-  const [practiceTopic, setPracticeTopic] = useState('')
-  const [difficulty, setDifficulty] = useState('Medium')
-  const [questionCount, setQuestionCount] = useState(5)
-  const [practiceQuestions, setPracticeQuestions] = useState('')
-
-  // File Upload State
-  const [uploadedFiles, setUploadedFiles] = useState([])
-  const [materialSubject, setMaterialSubject] = useState('')
-  const [analysisResult, setAnalysisResult] = useState('')
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [extractedContent, setExtractedContent] = useState('')
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [processingStatus, setProcessingStatus] = useState('')
   const fileInputRef = useRef(null)
-  const planFileInputRef = useRef(null)
-  const practiceFileInputRef = useRef(null)
+  
+  // Assessment & Quiz
+  const [questions, setQuestions] = useState([])
+  const [currentQ, setCurrentQ] = useState(0)
+  const [selectedAnswer, setSelectedAnswer] = useState(null)
+  const [answers, setAnswers] = useState([])
+  const [showExplanation, setShowExplanation] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [assessmentResults, setAssessmentResults] = useState(null)
+  
+  // Chat/Learn
+  const [messages, setMessages] = useState([])
+  const [input, setInput] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const messagesEndRef = useRef(null)
+  const [lessonContent, setLessonContent] = useState([]) // Steps in lesson
+  
+  // Share modal
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [shareLink, setShareLink] = useState('')
+  const [copySuccess, setCopySuccess] = useState(false)
 
-  // Study Plan File Upload State
-  const [planUploadedFiles, setPlanUploadedFiles] = useState([])
-  const [planExtractedContent, setPlanExtractedContent] = useState('')
+  // Filter
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('all')
 
-  // Practice File Upload State  
-  const [practiceUploadedFiles, setPracticeUploadedFiles] = useState([])
-  const [practiceExtractedContent, setPracticeExtractedContent] = useState('')
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(courses))
+  }, [courses])
 
-  const addTopic = () => {
-    setTopics([...topics, ''])
-  }
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
-  const removeTopic = (index) => {
-    if (topics.length > 1) {
-      setTopics(topics.filter((_, i) => i !== index))
+  // Check for shared course in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const sharedId = params.get('shared')
+    if (sharedId) {
+      loadSharedCourse(sharedId)
     }
-  }
+  }, [])
 
-  const updateTopic = (index, value) => {
-    const newTopics = [...topics]
-    newTopics[index] = value
-    setTopics(newTopics)
-  }
-
-  const handleGeneratePlan = async () => {
-    if (!subject || !examDate) {
-      alert('Please fill in subject and exam date')
-      return
-    }
-
-    setIsGenerating(true)
+  const loadSharedCourse = async (shareId) => {
     try {
-      // Build prompt with uploaded content if available
-      let prompt = `Create a detailed study plan for a student preparing for a ${subject} exam.
-
-Details:
-- Days until exam: ${Math.ceil((new Date(examDate) - new Date()) / (1000 * 60 * 60 * 24))}
-- Topics to cover: ${topics.filter(t => t.trim()).join(', ') || 'General topics for ' + subject}
-- Current level: ${currentLevel}`
-
-      if (planExtractedContent) {
-        prompt += `
-
-The student has provided the following study materials/previous exam questions for reference:
----
-${planExtractedContent.substring(0, 8000)}
----
-
-Please analyze these materials and create a study plan that:
-1. Focuses on the topics and question types shown in the materials
-2. Prioritizes areas that appear frequently in the provided content
-3. Includes practice with similar question formats`
+      // Load from Supabase
+      const { data, error } = await supabase
+        .from('shared_courses')
+        .select('*')
+        .eq('share_id', shareId)
+        .single()
+      
+      if (error || !data) {
+        alert('Shared course not found or expired')
+        return
       }
-
-      prompt += `
-
-Please provide:
-1. A day-by-day study schedule
-2. Key concepts to focus on each day
-3. Practice problem suggestions based on the materials provided
-4. Review sessions
-5. Tips for exam day
-
-Format the response in a clear, organized way using markdown with headers, bold text, and lists.`
-
-      const response = await sendMessage([{ role: 'user', content: prompt }], subject)
-      setStudyPlan(response.content)
-    } catch (error) {
-      setStudyPlan(`Error generating plan: ${error.message}. Make sure the AI proxy is running.`)
-    } finally {
-      setIsGenerating(false)
+      
+      // Check if user already has this course
+      const existing = courses.find(c => c.originalId === data.course_id)
+      if (existing) {
+        setActiveCourse(existing)
+        setView('course')
+        return
+      }
+      
+      // Create new course from shared data
+      const courseData = data.course_data
+      const newCourse = {
+        ...courseData,
+        id: Date.now(),
+        originalId: data.course_id,
+        sharedFrom: data.shared_by_name,
+        lessons: courseData.lessons.map(l => ({ ...l, progress: 0, quizScore: null, completed: false })),
+        totalProgress: 0,
+        needsAssessment: true
+      }
+      
+      setCourses(prev => [...prev, newCourse])
+      setActiveCourse(newCourse)
+      setView('assessment')
+      
+      // Clear URL param
+      window.history.replaceState({}, '', window.location.pathname)
+    } catch (err) {
+      console.error('Error loading shared course:', err)
     }
   }
 
-  const handleGenerateQuestions = async () => {
-    if (!practiceSubject || !practiceTopic) {
-      alert('Please fill in subject and topic')
-      return
-    }
-
-    setIsGenerating(true)
-    try {
-      let prompt = `Generate ${questionCount} practice questions for ${practiceSubject} on the topic of "${practiceTopic}" at ${difficulty} difficulty level.`
-
-      if (practiceExtractedContent) {
-        prompt += `
-
-The student has provided the following study materials/previous exam questions as reference:
----
-${practiceExtractedContent.substring(0, 8000)}
----
-
-Please generate questions that are similar in style and difficulty to those in the provided materials.`
-      }
-
-      prompt += `
-
-For each question:
-1. State the question clearly
-2. Provide multiple choice options (A, B, C, D) if applicable
-3. Include the correct answer clearly marked
-4. Provide a detailed explanation
-
-Format using markdown with proper headers (###), **bold** for answers, and clear structure.`
-
-      const response = await sendMessage([{ role: 'user', content: prompt }], practiceSubject)
-      setPracticeQuestions(response.content)
-    } catch (error) {
-      setPracticeQuestions(`Error generating questions: ${error.message}. Make sure the AI proxy is running.`)
-    } finally {
-      setIsGenerating(false)
-    }
-  }
-
-  // File Upload Functions
   const extractTextFromPDF = async (file) => {
     const arrayBuffer = await file.arrayBuffer()
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
     let fullText = ''
-    
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i)
       const textContent = await page.getTextContent()
-      const pageText = textContent.items.map(item => item.str).join(' ')
-      fullText += pageText + '\n\n'
+      fullText += textContent.items.map(item => item.str).join(' ') + '\n\n'
     }
-    
-    return fullText
+    return fullText.trim()
   }
 
-  const handleFileSelect = async (e) => {
+  const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files)
-    const processedFiles = []
-
-    for (const file of files) {
-      const fileInfo = {
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        content: null,
-        preview: null
-      }
-
-      if (file.type === 'application/pdf') {
-        try {
-          fileInfo.content = await extractTextFromPDF(file)
-          fileInfo.fileType = 'pdf'
-        } catch (error) {
-          console.error('Error extracting PDF:', error)
-          fileInfo.error = 'Failed to extract PDF content'
-        }
-      } else if (file.type.startsWith('image/')) {
-        const reader = new FileReader()
-        const base64 = await new Promise((resolve) => {
-          reader.onloadend = () => resolve(reader.result)
-          reader.readAsDataURL(file)
-        })
-        fileInfo.content = base64
-        fileInfo.preview = base64
-        fileInfo.fileType = 'image'
-      } else if (file.type === 'text/plain' || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
-        const text = await file.text()
-        fileInfo.content = text
-        fileInfo.fileType = 'text'
-      }
-
-      processedFiles.push(fileInfo)
-    }
-
-    setUploadedFiles(prev => [...prev, ...processedFiles])
-    // Also update extracted content for materials tab
-    const allContent = [...uploadedFiles, ...processedFiles]
-      .filter(f => f.content && f.fileType !== 'image')
-      .map(f => f.content)
-      .join('\n\n---\n\n')
-    setExtractedContent(allContent)
-    
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
-  }
-
-  // Generic file processor for plan and practice tabs
-  const processFiles = async (files, setFiles, setContent, inputRef) => {
-    const processedFiles = []
-    let allTextContent = ''
-
-    for (const file of files) {
-      const fileInfo = {
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        content: null,
-        preview: null
-      }
-
-      if (file.type === 'application/pdf') {
-        try {
-          fileInfo.content = await extractTextFromPDF(file)
-          fileInfo.fileType = 'pdf'
-          allTextContent += `\n\n--- ${file.name} ---\n\n` + fileInfo.content
-        } catch (error) {
-          console.error('Error extracting PDF:', error)
-          fileInfo.error = 'Failed to extract PDF content'
-        }
-      } else if (file.type.startsWith('image/')) {
-        const reader = new FileReader()
-        const base64 = await new Promise((resolve) => {
-          reader.onloadend = () => resolve(reader.result)
-          reader.readAsDataURL(file)
-        })
-        fileInfo.content = base64
-        fileInfo.preview = base64
-        fileInfo.fileType = 'image'
-      } else if (file.type === 'text/plain' || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
-        const text = await file.text()
-        fileInfo.content = text
-        fileInfo.fileType = 'text'
-        allTextContent += `\n\n--- ${file.name} ---\n\n` + text
-      }
-
-      processedFiles.push(fileInfo)
-    }
-
-    setFiles(prev => [...prev, ...processedFiles])
-    setContent(prev => prev + allTextContent)
-    
-    if (inputRef?.current) {
-      inputRef.current.value = ''
-    }
-  }
-
-  const handlePlanFileSelect = async (e) => {
-    await processFiles(Array.from(e.target.files), setPlanUploadedFiles, setPlanExtractedContent, planFileInputRef)
-  }
-
-  const handlePracticeFileSelect = async (e) => {
-    await processFiles(Array.from(e.target.files), setPracticeUploadedFiles, setPracticeExtractedContent, practiceFileInputRef)
-  }
-
-  const removePlanFile = (index) => {
-    setPlanUploadedFiles(prev => {
-      const newFiles = prev.filter((_, i) => i !== index)
-      // Recalculate content
-      const newContent = newFiles
-        .filter(f => f.content && f.fileType !== 'image')
-        .map(f => `--- ${f.name} ---\n\n${f.content}`)
-        .join('\n\n')
-      setPlanExtractedContent(newContent)
-      return newFiles
-    })
-  }
-
-  const removePracticeFile = (index) => {
-    setPracticeUploadedFiles(prev => {
-      const newFiles = prev.filter((_, i) => i !== index)
-      const newContent = newFiles
-        .filter(f => f.content && f.fileType !== 'image')
-        .map(f => `--- ${f.name} ---\n\n${f.content}`)
-        .join('\n\n')
-      setPracticeExtractedContent(newContent)
-      return newFiles
-    })
-  }
-
-  const removeFile = (index) => {
-    setUploadedFiles(prev => prev.filter((_, i) => i !== index))
-  }
-
-  const handleAnalyzeMaterials = async () => {
-    if (uploadedFiles.length === 0) {
-      alert('Please upload at least one file')
+    if (!files.length || !subjectName.trim()) {
+      alert('Please enter a subject name first')
       return
     }
 
-    setIsAnalyzing(true)
-    setAnalysisResult('')
+    setIsProcessing(true)
+    setProcessingStatus('Reading your materials...')
 
     try {
-      const results = []
+      let allContent = ''
       
-      for (const file of uploadedFiles) {
-        if (file.error) continue
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        setProcessingStatus(`Processing ${file.name}... (${i + 1}/${files.length})`)
         
-        const response = await analyzeDocument(
-          file.content,
-          file.fileType,
-          materialSubject
-        )
-        results.push(`## ${file.name}\n\n${response.content}`)
+        if (file.type === 'application/pdf') {
+          const text = await extractTextFromPDF(file)
+          if (text.length < 200) {
+            // Scanned PDF - use vision
+            const arrayBuffer = await file.arrayBuffer()
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+            for (let p = 1; p <= Math.min(pdf.numPages, 5); p++) {
+              const page = await pdf.getPage(p)
+              const viewport = page.getViewport({ scale: 2 })
+              const canvas = document.createElement('canvas')
+              canvas.width = viewport.width
+              canvas.height = viewport.height
+              await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise
+              const response = await analyzeImage(canvas.toDataURL('image/png'), 'Extract all text from this document page', subjectName)
+              allContent += response.content + '\n\n'
+            }
+          } else {
+            allContent += text + '\n\n'
+          }
+        } else if (file.type.startsWith('image/')) {
+          const reader = new FileReader()
+          const base64 = await new Promise(r => { reader.onloadend = () => r(reader.result); reader.readAsDataURL(file) })
+          const response = await analyzeImage(base64, 'Extract all text and content from this image', subjectName)
+          allContent += response.content + '\n\n'
+        } else {
+          allContent += await file.text() + '\n\n'
+        }
       }
 
-      setAnalysisResult(results.join('\n\n---\n\n'))
+      setProcessingStatus('Creating your personalized course...')
+      
+      const lessonsPrompt = `Analyze this study material and create a detailed course outline.
+
+Material:
+${allContent.substring(0, 15000)}
+
+Create lessons that cover ALL topics in the material. For each lesson:
+1. Give a clear, specific title
+2. Write a 1-2 sentence description
+3. List 4-6 key concepts/points to cover
+
+Return ONLY valid JSON array:
+[{"id":1,"title":"Topic Name","description":"What this covers","keyPoints":["Concept 1","Concept 2","Concept 3","Concept 4"]}]`
+
+      const lessonsResponse = await sendMessage([{ role: 'user', content: lessonsPrompt }], subjectName)
+      
+      let lessonsJson = lessonsResponse.content.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
+      const startIdx = lessonsJson.indexOf('[')
+      const endIdx = lessonsJson.lastIndexOf(']')
+      if (startIdx !== -1 && endIdx !== -1) lessonsJson = lessonsJson.substring(startIdx, endIdx + 1)
+      
+      const lessons = JSON.parse(lessonsJson).map((l, idx) => ({
+        ...l, 
+        id: idx + 1, 
+        progress: 0, 
+        quizScore: null, 
+        completed: false,
+        knowledgeLevel: null // Will be set by assessment
+      }))
+
+      const newCourse = {
+        id: Date.now(),
+        name: subjectName,
+        examDate: examDate || null,
+        content: allContent,
+        lessons,
+        totalProgress: 0,
+        createdAt: new Date().toISOString(),
+        needsAssessment: true
+      }
+
+      setCourses(prev => [...prev, newCourse])
+      setSubjectName('')
+      setExamDate('')
+      setShowNewCourse(false)
+      setActiveCourse(newCourse)
+      
+      // Start with assessment
+      setView('assessment')
+      await generateAssessment(newCourse)
+      
     } catch (error) {
-      setAnalysisResult(`Error analyzing materials: ${error.message}. Make sure the AI proxy is running.`)
+      console.error('Error:', error)
+      alert('Error processing files: ' + error.message)
     } finally {
-      setIsAnalyzing(false)
+      setIsProcessing(false)
+      setProcessingStatus('')
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
-  const formatFileSize = (bytes) => {
-    if (bytes < 1024) return bytes + ' B'
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+  const generateAssessment = async (course) => {
+    setIsGenerating(true)
+    setQuestions([])
+    setCurrentQ(0)
+    setAnswers([])
+    setSelectedAnswer(null)
+    setShowExplanation(false)
+    
+    try {
+      const prompt = `Create 10 assessment questions to test the student's existing knowledge of this material. 
+Mix easy, medium, and hard questions covering different topics.
+
+Material: ${course.content.substring(0, 8000)}
+Topics: ${course.lessons.map(l => l.title).join(', ')}
+
+Use LaTeX for math: $x^2$, $\\frac{a}{b}$
+
+Return ONLY valid JSON array (no other text):
+[{"question":"...","options":["A) ...","B) ...","C) ...","D) ..."],"correct":0,"explanation":"...","topic":"Lesson name it relates to","difficulty":"easy|medium|hard"}]`
+
+      const response = await sendMessage([{ role: 'user', content: prompt }], course.name)
+      
+      let json = response.content.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
+      const start = json.indexOf('['), end = json.lastIndexOf(']')
+      if (start !== -1 && end !== -1) json = json.substring(start, end + 1)
+      
+      // Clean up JSON
+      json = json.replace(/,(\s*[\]}])/g, '$1')
+      
+      const parsed = JSON.parse(json)
+      setQuestions(parsed.slice(0, 10).map(q => ({
+        ...q,
+        options: q.options || ['A', 'B', 'C', 'D'],
+        correct: typeof q.correct === 'number' ? q.correct : 0
+      })))
+    } catch (error) {
+      console.error('Assessment error:', error)
+      // Generate fallback questions
+      setQuestions([{
+        question: 'Ready to start your assessment?',
+        options: ['Yes, let\'s begin!', 'Show me the course first', 'I need help', 'Skip assessment'],
+        correct: 0,
+        explanation: 'Great! Let\'s test your knowledge.',
+        topic: 'General',
+        difficulty: 'easy'
+      }])
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
-  // File upload component for reuse
-  const FileUploadZone = ({ files, onFileSelect, onRemove, inputRef, accept = ".pdf,.png,.jpg,.jpeg,.gif,.txt,.md" }) => (
-    <div className="space-y-3">
-      <div
-        onClick={() => inputRef.current?.click()}
-        className="border-2 border-dashed border-gray-300 rounded-2xl p-6 text-center cursor-pointer hover:border-primary-400 hover:bg-primary-50/50 transition-all group"
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          onChange={onFileSelect}
-          accept={accept}
-          multiple
-          className="hidden"
-        />
-        <div className="bg-primary-100 w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 group-hover:bg-primary-200 transition-colors">
-          <Upload className="h-6 w-6 text-primary-600" />
-        </div>
-        <p className="text-gray-700 font-medium text-sm">
-          Upload PDFs, Images, or Text files
-        </p>
-        <p className="text-xs text-gray-500 mt-1">
-          Previous exams, textbook chapters, notes
-        </p>
-      </div>
+  const handleAssessmentAnswer = (idx) => {
+    if (showExplanation) return
+    setSelectedAnswer(idx)
+  }
 
-      {files.length > 0 && (
-        <div className="space-y-2">
-          {files.map((file, index) => (
-            <div
-              key={index}
-              className="flex items-center gap-3 p-2 bg-gray-50 rounded-xl group"
-            >
-              {file.preview ? (
-                <img 
-                  src={file.preview} 
-                  alt={file.name}
-                  className="w-10 h-10 object-cover rounded-lg"
-                />
-              ) : (
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  file.fileType === 'pdf' ? 'bg-red-100' : 'bg-blue-100'
-                }`}>
-                  {file.fileType === 'pdf' ? (
-                    <FileText className="h-5 w-5 text-red-600" />
-                  ) : (
-                    <File className="h-5 w-5 text-blue-600" />
-                  )}
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {file.name}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {formatFileSize(file.size)}
-                </p>
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); onRemove(index); }}
-                className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
+  const submitAssessmentAnswer = () => {
+    if (selectedAnswer === null) return
+    setAnswers([...answers, { 
+      selected: selectedAnswer, 
+      correct: selectedAnswer === questions[currentQ].correct,
+      topic: questions[currentQ].topic,
+      difficulty: questions[currentQ].difficulty
+    }])
+    setShowExplanation(true)
+  }
+
+  const nextAssessmentQuestion = async () => {
+    if (currentQ < questions.length - 1) {
+      setCurrentQ(currentQ + 1)
+      setSelectedAnswer(null)
+      setShowExplanation(false)
+    } else {
+      // Assessment complete - calculate results
+      const results = calculateAssessmentResults()
+      setAssessmentResults(results)
+      
+      // Update course with knowledge levels
+      const updated = { ...activeCourse, needsAssessment: false }
+      updated.lessons = updated.lessons.map(lesson => {
+        const topicAnswers = answers.filter(a => 
+          a.topic?.toLowerCase().includes(lesson.title.toLowerCase()) ||
+          lesson.title.toLowerCase().includes(a.topic?.toLowerCase() || '')
+        )
+        const correct = topicAnswers.filter(a => a.correct).length
+        const total = topicAnswers.length || 1
+        return {
+          ...lesson,
+          knowledgeLevel: total > 0 ? Math.round((correct / total) * 100) : 50
+        }
+      })
+      
+      setCourses(prev => prev.map(c => c.id === activeCourse.id ? updated : c))
+      setActiveCourse(updated)
+      setView('results')
+    }
+  }
+
+  const calculateAssessmentResults = () => {
+    const total = questions.length
+    const correct = answers.filter(a => a.correct).length
+    const percentage = Math.round((correct / total) * 100)
+    
+    // Group by topic
+    const byTopic = {}
+    answers.forEach((a, i) => {
+      const topic = questions[i]?.topic || 'General'
+      if (!byTopic[topic]) byTopic[topic] = { correct: 0, total: 0 }
+      byTopic[topic].total++
+      if (a.correct) byTopic[topic].correct++
+    })
+    
+    // Determine skill level
+    let level = 'Beginner'
+    let message = 'Great starting point! I\'ll teach you everything from the basics.'
+    if (percentage >= 80) {
+      level = 'Advanced'
+      message = 'Impressive! You already know a lot. I\'ll focus on advanced concepts and practice.'
+    } else if (percentage >= 50) {
+      level = 'Intermediate'
+      message = 'Good foundation! I\'ll help you strengthen your understanding.'
+    }
+    
+    return { total, correct, percentage, byTopic, level, message }
+  }
+
+  const startLesson = async (lesson) => {
+    setActiveLesson(lesson)
+    setCurrentStep(0)
+    setLessonContent([])
+    setMessages([])
+    setView('lesson-step')
+    setIsLoading(true)
+    
+    try {
+      // Generate lesson content with steps
+      const prompt = `Create a structured lesson on "${lesson.title}" for a student at ${lesson.knowledgeLevel >= 70 ? 'advanced' : lesson.knowledgeLevel >= 40 ? 'intermediate' : 'beginner'} level.
+
+Key concepts to cover: ${lesson.keyPoints.join(', ')}
+Course material: ${activeCourse.content.substring(0, 5000)}
+
+Create 4-5 teaching steps. Each step should:
+1. Explain ONE concept clearly with examples
+2. Use real-world analogies
+3. Include a mini check-in question
+
+Return JSON array:
+[{
+  "title": "Step title",
+  "content": "Detailed explanation with emojis, examples. Use $...$ for math.",
+  "checkQuestion": "A question to verify understanding",
+  "checkAnswer": "The expected answer or concept"
+}]
+
+Be friendly, use emojis 🎯, and make it engaging!`
+
+      const response = await sendMessage([{ role: 'user', content: prompt }], activeCourse.name)
+      
+      let json = response.content.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
+      const start = json.indexOf('['), end = json.lastIndexOf(']')
+      if (start !== -1 && end !== -1) json = json.substring(start, end + 1)
+      json = json.replace(/,(\s*[\]}])/g, '$1')
+      
+      const steps = JSON.parse(json)
+      setLessonContent(steps)
+      
+      // Show first step
+      setMessages([{
+        role: 'assistant',
+        content: `# ${steps[0].title}\n\n${steps[0].content}`
+      }])
+    } catch (error) {
+      console.error('Lesson error:', error)
+      setMessages([{
+        role: 'assistant',
+        content: `Let's learn about **${lesson.title}**! 📚\n\n${lesson.keyPoints.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n\nAsk me anything about these topics!`
+      }])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleStepResponse = async () => {
+    if (!input.trim() || isLoading) return
+    
+    const userMsg = input.trim()
+    setInput('')
+    setMessages(prev => [...prev, { role: 'user', content: userMsg }])
+    setIsLoading(true)
+    
+    try {
+      const currentStepData = lessonContent[currentStep]
+      
+      // Check if user understood
+      const checkPrompt = `Student answered: "${userMsg}"
+Expected concept: "${currentStepData?.checkAnswer || 'understanding'}"
+Question was: "${currentStepData?.checkQuestion || 'Do you understand?'}"
+
+Evaluate if the student understood (even partially).
+If they need help, explain briefly.
+If they understood, praise them and say "READY_NEXT" at the end.
+Be encouraging and use emojis!`
+
+      const response = await sendMessage([
+        { role: 'user', content: `Lesson: ${activeLesson.title}` },
+        ...messages.map(m => ({ role: m.role, content: m.content })),
+        { role: 'user', content: checkPrompt }
+      ], activeCourse.name)
+      
+      const aiResponse = response.content
+      setMessages(prev => [...prev, { role: 'assistant', content: aiResponse.replace('READY_NEXT', '') }])
+      
+      // If student understood, move to next step after a delay
+      if (aiResponse.includes('READY_NEXT') && currentStep < lessonContent.length - 1) {
+        setTimeout(() => {
+          setCurrentStep(currentStep + 1)
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: `# ${lessonContent[currentStep + 1].title}\n\n${lessonContent[currentStep + 1].content}`
+          }])
+        }, 1500)
+      } else if (aiResponse.includes('READY_NEXT') && currentStep === lessonContent.length - 1) {
+        // Lesson complete - quiz time
+        setTimeout(() => {
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: `🎉 **Amazing work!** You've completed all the learning steps!\n\nNow let's test what you learned with a quick quiz. Ready?\n\n*Click "Take Quiz" below to continue!*`
+          }])
+        }, 1500)
+      }
+    } catch (error) {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Hmm, let me think about that... 🤔 Can you rephrase?' }])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const startQuiz = async (lesson) => {
+    setActiveLesson(lesson)
+    setView('quiz')
+    setIsGenerating(true)
+    setQuestions([])
+    setCurrentQ(0)
+    setAnswers([])
+    setSelectedAnswer(null)
+    setShowExplanation(false)
+    
+    try {
+      const prompt = `Create 5 quiz questions about "${lesson.title}".
+
+Key concepts: ${lesson.keyPoints.join(', ')}
+Material: ${activeCourse.content.substring(0, 6000)}
+
+Make questions test real understanding, not just memorization.
+Use LaTeX for math: $x^2$, $\\frac{a}{b}$
+
+Return ONLY valid JSON array:
+[{"question":"...","options":["A) ...","B) ...","C) ...","D) ..."],"correct":0,"explanation":"..."}]`
+
+      const response = await sendMessage([{ role: 'user', content: prompt }], activeCourse.name)
+      
+      let json = response.content.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
+      const start = json.indexOf('['), end = json.lastIndexOf(']')
+      if (start !== -1 && end !== -1) json = json.substring(start, end + 1)
+      json = json.replace(/,(\s*[\]}])/g, '$1')
+      
+      setQuestions(JSON.parse(json).slice(0, 5))
+    } catch (error) {
+      console.error('Quiz error:', error)
+      setQuestions([{ question: 'Error generating questions. Try again?', options: ['Retry', 'Go back', 'Skip', 'Help'], correct: 0, explanation: '' }])
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const handleQuizAnswer = (idx) => {
+    if (showExplanation) return
+    setSelectedAnswer(idx)
+  }
+
+  const submitQuizAnswer = () => {
+    if (selectedAnswer === null) return
+    setAnswers([...answers, { selected: selectedAnswer, correct: selectedAnswer === questions[currentQ].correct }])
+    setShowExplanation(true)
+  }
+
+  const nextQuizQuestion = () => {
+    if (currentQ < questions.length - 1) {
+      setCurrentQ(currentQ + 1)
+      setSelectedAnswer(null)
+      setShowExplanation(false)
+    } else {
+      // Quiz complete
+      const score = answers.filter(a => a.correct).length
+      
+      // Update lesson progress
+      const updated = { ...activeCourse }
+      const idx = updated.lessons.findIndex(l => l.id === activeLesson.id)
+      if (idx !== -1) {
+        updated.lessons[idx].quizScore = score
+        updated.lessons[idx].progress = Math.max(updated.lessons[idx].progress, Math.round((score / questions.length) * 100))
+        if (score >= questions.length * 0.7) updated.lessons[idx].completed = true
+        updated.totalProgress = Math.round(updated.lessons.reduce((s, l) => s + l.progress, 0) / updated.lessons.length)
+        setCourses(prev => prev.map(c => c.id === activeCourse.id ? updated : c))
+        setActiveCourse(updated)
+      }
+      
+      setView('results')
+    }
+  }
+
+  const shareCourse = async () => {
+    if (!activeCourse || !user) return
+    
+    try {
+      const shareId = `${activeCourse.id}-${Date.now()}`
+      
+      // Save to Supabase
+      const { error } = await supabase
+        .from('shared_courses')
+        .insert({
+          share_id: shareId,
+          course_id: activeCourse.id,
+          shared_by: user.id,
+          shared_by_name: user.user_metadata?.full_name || user.email,
+          course_data: {
+            name: activeCourse.name,
+            lessons: activeCourse.lessons.map(l => ({
+              id: l.id,
+              title: l.title,
+              description: l.description,
+              keyPoints: l.keyPoints
+            })),
+            content: activeCourse.content.substring(0, 50000)
+          },
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        })
+      
+      if (error) throw error
+      
+      const link = `${window.location.origin}/exam-prep?shared=${shareId}`
+      setShareLink(link)
+      setShowShareModal(true)
+    } catch (error) {
+      console.error('Share error:', error)
+      alert('Error creating share link. Please try again.')
+    }
+  }
+
+  const copyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink)
+      setCopySuccess(true)
+      setTimeout(() => setCopySuccess(false), 2000)
+    } catch {
+      alert('Failed to copy. Please copy manually: ' + shareLink)
+    }
+  }
+
+  const deleteCourse = (id) => {
+    if (confirm('Delete this course? This cannot be undone.')) {
+      setCourses(prev => prev.filter(c => c.id !== id))
+      if (activeCourse?.id === id) { 
+        setActiveCourse(null)
+        setView('home') 
+      }
+    }
+  }
+
+  const daysUntil = (date) => date ? Math.ceil((new Date(date) - new Date()) / 86400000) : null
+  
+  const getSubjectStyle = (name) => {
+    for (const [key, style] of Object.entries(subjectStyles)) {
+      if (name.toLowerCase().includes(key.toLowerCase())) return style
+    }
+    return subjectStyles.default
+  }
+
+  const filteredCourses = courses.filter(c => {
+    if (searchQuery && !c.name.toLowerCase().includes(searchQuery.toLowerCase())) return false
+    return true
+  })
 
   return (
-    <div className="py-8 px-4">
-      <div className="max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4">
-            <GraduationCap className="h-4 w-4" />
-            AI-Powered Exam Prep
+    <div className="h-screen bg-[#0a0a0f] text-white flex overflow-hidden">
+      {/* Sidebar */}
+      <div className={`${sidebarOpen ? 'w-64' : 'w-16'} bg-[#0f0f15] border-r border-gray-800/50 flex flex-col transition-all duration-300`}>
+        {/* Logo */}
+        <div className="p-4 flex items-center gap-3">
+          <div className="bg-gradient-to-br from-primary-500 to-purple-600 p-2 rounded-xl">
+            <GraduationCap className="h-6 w-6" />
           </div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">Exam Preparation</h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Upload your study materials, previous exams, or textbooks. AI will create personalized study plans and practice questions.
-          </p>
+          {sidebarOpen && <span className="font-bold text-lg">StudyAI</span>}
         </div>
-
-        {/* Tabs */}
-        <div className="flex gap-2 mb-8 bg-gray-100 p-1.5 rounded-2xl">
+        
+        {/* Nav */}
+        <nav className="flex-1 px-2 py-4 space-y-1">
           <button
-            onClick={() => setActiveTab('materials')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-all ${
-              activeTab === 'materials'
-                ? 'bg-white text-primary-600 shadow-md'
-                : 'text-gray-600 hover:text-gray-900'
+            onClick={() => { setView('home'); setActiveCourse(null) }}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
+              view === 'home' && !activeCourse ? 'bg-primary-500/20 text-primary-400' : 'text-gray-400 hover:bg-gray-800/50 hover:text-white'
             }`}
           >
-            <Upload className="h-5 w-5" />
-            Study Materials
+            <Home className="h-5 w-5 shrink-0" />
+            {sidebarOpen && <span>Dashboard</span>}
           </button>
-          <button
-            onClick={() => setActiveTab('plan')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-all ${
-              activeTab === 'plan'
-                ? 'bg-white text-primary-600 shadow-md'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <Target className="h-5 w-5" />
-            Study Plan
-          </button>
-          <button
-            onClick={() => setActiveTab('practice')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-medium transition-all ${
-              activeTab === 'practice'
-                ? 'bg-white text-primary-600 shadow'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <FileText className="h-5 w-5" />
-            Practice Questions
-          </button>
+          
+          {sidebarOpen && courses.length > 0 && (
+            <div className="pt-4">
+              <p className="px-3 text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Your Courses</p>
+              {courses.slice(0, 5).map(course => {
+                const style = getSubjectStyle(course.name)
+                return (
+                  <button
+                    key={course.id}
+                    onClick={() => { setActiveCourse(course); setView('course') }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${
+                      activeCourse?.id === course.id ? 'bg-gray-800/70 text-white' : 'text-gray-400 hover:bg-gray-800/50 hover:text-white'
+                    }`}
+                  >
+                    <span className="text-lg">{style.icon}</span>
+                    <span className="truncate text-sm">{course.name}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </nav>
+        
+        {/* User */}
+        <div className="p-3 border-t border-gray-800/50">
+          {sidebarOpen ? (
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center font-bold">
+                {user?.email?.[0].toUpperCase() || 'U'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{user?.user_metadata?.full_name || 'Student'}</p>
+                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center font-bold mx-auto">
+              {user?.email?.[0].toUpperCase() || 'U'}
+            </div>
+          )}
         </div>
-
-        {/* Study Materials Tab */}
-        {activeTab === 'materials' && (
-          <div className="grid md:grid-cols-2 gap-8">
-            {/* Upload Section */}
-            <div className="card">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <FileUp className="h-5 w-5 text-primary-600" />
-                Upload Study Materials
-              </h2>
-
-              <div className="space-y-4">
+      </div>
+      
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Bar */}
+        <header className="bg-[#0f0f15]/80 backdrop-blur-xl border-b border-gray-800/50 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-gray-800 rounded-lg">
+              <Menu className="h-5 w-5 text-gray-400" />
+            </button>
+            
+            {view !== 'home' && activeCourse && (
+              <>
+                <button onClick={() => setView(view === 'course' ? 'home' : 'course')} className="p-2 hover:bg-gray-800 rounded-lg">
+                  <ChevronLeft className="h-5 w-5 text-gray-400" />
+                </button>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Subject (Optional)
-                  </label>
+                  <h1 className="font-semibold">{activeCourse.name}</h1>
+                  <p className="text-sm text-gray-500">{activeCourse.lessons.length} lessons · {activeCourse.totalProgress}% complete</p>
+                </div>
+              </>
+            )}
+            
+            {view === 'home' && (
+              <h1 className="text-xl font-semibold">Exam Prep</h1>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-3">
+            {activeCourse && view === 'course' && (
+              <button 
+                onClick={shareCourse}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm transition-colors"
+              >
+                <Share2 className="h-4 w-4" />
+                Share
+              </button>
+            )}
+            
+            <button 
+              onClick={() => setShowNewCourse(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-500 rounded-xl text-sm font-medium transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              New Exam
+            </button>
+          </div>
+        </header>
+        
+        {/* Content Area */}
+        <main className="flex-1 overflow-y-auto">
+          {/* HOME - Dashboard */}
+          {view === 'home' && (
+            <div className="p-6 max-w-6xl mx-auto">
+              {/* Search & Filter */}
+              <div className="flex items-center gap-4 mb-8">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
                   <input
                     type="text"
-                    value={materialSubject}
-                    onChange={(e) => setMaterialSubject(e.target.value)}
-                    placeholder="e.g., Biology, History"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search courses..."
+                    className="w-full bg-gray-900/50 border border-gray-800 rounded-xl pl-12 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500"
                   />
                 </div>
-
-                {/* Drop Zone */}
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center cursor-pointer hover:border-primary-400 hover:bg-primary-50/50 transition-all group"
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    onChange={handleFileSelect}
-                    accept=".pdf,.png,.jpg,.jpeg,.gif,.txt,.md"
-                    multiple
-                    className="hidden"
-                  />
-                  <div className="bg-primary-100 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-primary-200 transition-colors">
-                    <Upload className="h-8 w-8 text-primary-600" />
-                  </div>
-                  <p className="text-gray-700 font-medium mb-1">
-                    Drop files here or click to upload
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    PDF, Images (PNG, JPG), Text files
-                  </p>
+                
+                <div className="flex gap-2">
+                  {['Math', 'Physics', 'Chemistry', 'Computer Science'].map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(selectedCategory === cat ? 'all' : cat)}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-all ${
+                        selectedCategory === cat ? 'bg-gray-700 text-white' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800'
+                      }`}
+                    >
+                      <span>{subjectStyles[cat]?.icon}</span>
+                      {cat}
+                    </button>
+                  ))}
                 </div>
-
-                {/* Uploaded Files List */}
-                {uploadedFiles.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-700">
-                      Uploaded Files ({uploadedFiles.length})
-                    </p>
-                    {uploadedFiles.map((file, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl group"
-                      >
-                        {file.preview ? (
-                          <img 
-                            src={file.preview} 
-                            alt={file.name}
-                            className="w-12 h-12 object-cover rounded-lg"
-                          />
-                        ) : (
-                          <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                            file.fileType === 'pdf' ? 'bg-red-100' : 'bg-blue-100'
-                          }`}>
-                            {file.fileType === 'pdf' ? (
-                              <FileText className="h-6 w-6 text-red-600" />
-                            ) : (
-                              <File className="h-6 w-6 text-blue-600" />
-                            )}
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {file.name}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {formatFileSize(file.size)}
-                            {file.error && (
-                              <span className="text-red-500 ml-2">{file.error}</span>
-                            )}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => removeFile(index)}
-                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+              </div>
+              
+              {/* Upcoming Exams */}
+              {courses.some(c => c.examDate) && (
+                <section className="mb-8">
+                  <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    Upcoming <ChevronRight className="h-4 w-4 text-gray-500" />
+                  </h2>
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {courses.filter(c => c.examDate && daysUntil(c.examDate) > 0).sort((a, b) => new Date(a.examDate) - new Date(b.examDate)).slice(0, 3).map(course => {
+                      const style = getSubjectStyle(course.name)
+                      const days = daysUntil(course.examDate)
+                      return (
+                        <div
+                          key={course.id}
+                          onClick={() => { setActiveCourse(course); setView('course') }}
+                          className="bg-gradient-to-br from-gray-900 to-gray-900/50 border border-gray-800 rounded-2xl p-5 cursor-pointer hover:border-gray-700 transition-all group"
                         >
-                          <X className="h-4 w-4" />
-                        </button>
+                          <div className="flex items-start justify-between mb-4">
+                            <span className="bg-gray-800 px-3 py-1 rounded-full text-sm">{course.name.split(' ')[0]}</span>
+                            <div className={`w-10 h-10 rounded-full border-2 border-gray-700 flex items-center justify-center bg-gradient-to-br ${style.color} opacity-20`} />
+                          </div>
+                          <h3 className="font-semibold text-lg mb-1 group-hover:text-primary-400 transition-colors">{course.name}</h3>
+                          <p className="text-sm text-gray-500 mb-4 truncate">{course.lessons.length} lessons</p>
+                          <div className="flex items-center gap-4 text-sm">
+                            <span className="text-red-400 flex items-center gap-1">
+                              <span className="w-2 h-2 bg-red-500 rounded-full" />
+                              {course.totalProgress}%
+                            </span>
+                            <span className="text-gray-500 flex items-center gap-1">
+                              <GraduationCap className="h-4 w-4" />
+                              in {days} days
+                            </span>
+                            <span className="text-gray-500 flex items-center gap-1">
+                              <Users className="h-4 w-4" />
+                              {course.lessons.length}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </section>
+              )}
+              
+              {/* All Courses */}
+              <section>
+                <h2 className="text-lg font-semibold mb-4">Your Courses</h2>
+                {filteredCourses.length === 0 ? (
+                  <div className="text-center py-16 bg-gray-900/30 rounded-2xl border border-gray-800/50">
+                    <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <BookOpen className="h-8 w-8 text-gray-600" />
+                    </div>
+                    <h3 className="text-lg font-medium mb-2">No courses yet</h3>
+                    <p className="text-gray-500 mb-6">Upload your study materials to get started</p>
+                    <button 
+                      onClick={() => setShowNewCourse(true)}
+                      className="bg-primary-600 hover:bg-primary-500 px-6 py-3 rounded-xl font-medium inline-flex items-center gap-2"
+                    >
+                      <Plus className="h-5 w-5" />
+                      Create Your First Course
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredCourses.map(course => {
+                      const style = getSubjectStyle(course.name)
+                      return (
+                        <div
+                          key={course.id}
+                          onClick={() => { setActiveCourse(course); setView(course.needsAssessment ? 'assessment' : 'course') }}
+                          className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5 cursor-pointer hover:border-gray-700 transition-all group relative"
+                        >
+                          <button
+                            onClick={(e) => { e.stopPropagation(); deleteCourse(course.id) }}
+                            className="absolute top-4 right-4 p-1.5 hover:bg-red-500/20 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="h-4 w-4 text-red-400" />
+                          </button>
+                          
+                          <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${style.color} flex items-center justify-center text-2xl mb-4`}>
+                            {style.icon}
+                          </div>
+                          
+                          <h3 className="font-semibold mb-1 group-hover:text-primary-400 transition-colors">{course.name}</h3>
+                          <p className="text-sm text-gray-500 mb-4">{course.lessons.length} lessons</p>
+                          
+                          {course.needsAssessment ? (
+                            <div className="flex items-center gap-2 text-amber-400 text-sm">
+                              <Zap className="h-4 w-4" />
+                              Take assessment to start
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3">
+                              <div className="flex-1 bg-gray-800 rounded-full h-2">
+                                <div 
+                                  className={`h-2 rounded-full bg-gradient-to-r ${style.color}`} 
+                                  style={{ width: `${course.totalProgress}%` }} 
+                                />
+                              </div>
+                              <span className="text-sm text-gray-400">{course.totalProgress}%</span>
+                            </div>
+                          )}
+                          
+                          {course.sharedFrom && (
+                            <p className="text-xs text-gray-600 mt-3 flex items-center gap-1">
+                              <Share2 className="h-3 w-3" />
+                              Shared by {course.sharedFrom}
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+          
+          {/* ASSESSMENT */}
+          {view === 'assessment' && activeCourse && (
+            <div className="max-w-2xl mx-auto p-6">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-primary-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Brain className="h-8 w-8 text-primary-400" />
+                </div>
+                <h1 className="text-2xl font-bold mb-2">Let's See What You Know!</h1>
+                <p className="text-gray-400">Answer these questions so I can personalize your learning experience.</p>
+              </div>
+              
+              <div className="bg-gray-900/50 rounded-2xl border border-gray-800 p-6">
+                {isGenerating ? (
+                  <div className="text-center py-12">
+                    <Loader2 className="h-12 w-12 text-primary-500 animate-spin mx-auto mb-4" />
+                    <p className="text-gray-400">Preparing your assessment...</p>
+                  </div>
+                ) : questions.length > 0 ? (
+                  <>
+                    <div className="flex items-center justify-between mb-6">
+                      <span className="text-sm text-gray-500">Question {currentQ + 1} of {questions.length}</span>
+                      <div className="flex gap-1">
+                        {questions.map((_, i) => (
+                          <div key={i} className={`w-3 h-3 rounded-full transition-colors ${
+                            i < currentQ ? (answers[i]?.correct ? 'bg-green-500' : 'bg-red-500') : 
+                            i === currentQ ? 'bg-primary-500' : 'bg-gray-700'
+                          }`} />
+                        ))}
                       </div>
+                    </div>
+                    
+                    <div className="mb-6">
+                      <div className="text-lg text-gray-100">
+                        <MarkdownRenderer content={questions[currentQ]?.question} />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3 mb-6">
+                      {questions[currentQ]?.options.map((opt, i) => (
+                        <button
+                          key={i}
+                          onClick={() => handleAssessmentAnswer(i)}
+                          disabled={showExplanation}
+                          className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                            showExplanation
+                              ? i === questions[currentQ].correct ? 'border-green-500 bg-green-500/10' : i === selectedAnswer ? 'border-red-500 bg-red-500/10' : 'border-gray-800'
+                              : selectedAnswer === i ? 'border-primary-500 bg-primary-500/10' : 'border-gray-800 hover:border-gray-700'
+                          }`}
+                        >
+                          <MarkdownRenderer content={opt} />
+                        </button>
+                      ))}
+                    </div>
+                    
+                    {showExplanation && (
+                      <div className={`p-4 rounded-xl mb-6 ${answers[currentQ]?.correct ? 'bg-green-500/10 border border-green-500/30' : 'bg-amber-500/10 border border-amber-500/30'}`}>
+                        <p className={`font-medium mb-2 ${answers[currentQ]?.correct ? 'text-green-400' : 'text-amber-400'}`}>
+                          {answers[currentQ]?.correct ? '✓ Correct!' : '✗ Not quite'}
+                        </p>
+                        <MarkdownRenderer content={questions[currentQ]?.explanation} />
+                      </div>
+                    )}
+                    
+                    <div className="flex gap-3">
+                      {!showExplanation ? (
+                        <button 
+                          onClick={submitAssessmentAnswer} 
+                          disabled={selectedAnswer === null}
+                          className="flex-1 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 py-3 rounded-xl font-medium"
+                        >
+                          Check Answer
+                        </button>
+                      ) : (
+                        <button onClick={nextAssessmentQuestion} className="flex-1 bg-primary-600 hover:bg-primary-500 py-3 rounded-xl font-medium flex items-center justify-center gap-2">
+                          {currentQ < questions.length - 1 ? 'Next Question' : 'See Results'} <ChevronRight className="h-5 w-5" />
+                        </button>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <button 
+                    onClick={() => generateAssessment(activeCourse)}
+                    className="w-full bg-primary-600 hover:bg-primary-500 py-4 rounded-xl font-medium"
+                  >
+                    Start Assessment
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          
+          {/* COURSE VIEW */}
+          {view === 'course' && activeCourse && (
+            <div className="p-6 max-w-4xl mx-auto">
+              {/* Course Header */}
+              <div className="bg-gradient-to-br from-gray-900 to-gray-900/50 rounded-2xl p-6 border border-gray-800 mb-8">
+                <div className="flex items-start gap-4 mb-4">
+                  <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${getSubjectStyle(activeCourse.name).color} flex items-center justify-center text-2xl`}>
+                    {getSubjectStyle(activeCourse.name).icon}
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-bold">{activeCourse.name}</h1>
+                    <p className="text-gray-400">{activeCourse.lessons.length} lessons · {activeCourse.lessons.filter(l => l.completed).length} completed</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-6">
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between text-sm mb-2">
+                      <span className="text-gray-400">Progress</span>
+                      <span className="font-medium">{activeCourse.totalProgress}%</span>
+                    </div>
+                    <div className="bg-gray-800 rounded-full h-3">
+                      <div 
+                        className={`h-3 rounded-full bg-gradient-to-r ${getSubjectStyle(activeCourse.name).color}`}
+                        style={{ width: `${activeCourse.totalProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                  
+                  {activeCourse.examDate && (
+                    <div className="text-center px-6 border-l border-gray-800">
+                      <p className="text-2xl font-bold text-amber-400">{daysUntil(activeCourse.examDate)}</p>
+                      <p className="text-xs text-gray-500">days left</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Lessons */}
+              <h2 className="text-lg font-semibold mb-4">Lessons</h2>
+              <div className="space-y-3">
+                {activeCourse.lessons.map((lesson, idx) => (
+                  <div
+                    key={lesson.id}
+                    className="bg-gray-900/50 border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition-all"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                        lesson.completed ? 'bg-green-500/20 text-green-400' : 
+                        lesson.progress > 0 ? 'bg-primary-500/20 text-primary-400' : 
+                        'bg-gray-800 text-gray-500'
+                      }`}>
+                        {lesson.completed ? <Check className="h-6 w-6" /> : 
+                         lesson.progress > 0 ? <span className="font-bold text-sm">{lesson.progress}%</span> :
+                         <span className="font-bold text-lg">{idx + 1}</span>}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium mb-1">{lesson.title}</h3>
+                        <p className="text-sm text-gray-500 mb-3">{lesson.description}</p>
+                        
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          {lesson.keyPoints.slice(0, 3).map((p, i) => (
+                            <span key={i} className="bg-gray-800/50 px-2 py-1 rounded text-xs text-gray-400">{p}</span>
+                          ))}
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => startLesson(lesson)}
+                            className="bg-primary-600 hover:bg-primary-500 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
+                          >
+                            <Play className="h-4 w-4" />
+                            {lesson.progress > 0 ? 'Continue' : 'Start'} Learning
+                          </button>
+                          <button 
+                            onClick={() => startQuiz(lesson)}
+                            className="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
+                          >
+                            <Brain className="h-4 w-4" />
+                            Quiz
+                          </button>
+                        </div>
+                        
+                        {lesson.quizScore !== null && (
+                          <p className="text-xs text-gray-500 mt-3">Last quiz: {lesson.quizScore}/5</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* LESSON STEP VIEW */}
+          {view === 'lesson-step' && activeLesson && (
+            <div className="flex flex-col h-full max-w-3xl mx-auto">
+              {/* Lesson Header */}
+              <div className="p-4 border-b border-gray-800 bg-gray-900/50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="font-semibold">{activeLesson.title}</h2>
+                    <p className="text-sm text-gray-500">
+                      Step {currentStep + 1} of {lessonContent.length || '?'} · Learning Mode
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => startQuiz(activeLesson)}
+                    className="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm flex items-center gap-2"
+                  >
+                    <Brain className="h-4 w-4" />
+                    Take Quiz
+                  </button>
+                </div>
+                
+                {lessonContent.length > 0 && (
+                  <div className="flex gap-1 mt-3">
+                    {lessonContent.map((_, i) => (
+                      <div 
+                        key={i} 
+                        className={`flex-1 h-1.5 rounded-full transition-colors ${
+                          i < currentStep ? 'bg-green-500' : i === currentStep ? 'bg-primary-500' : 'bg-gray-700'
+                        }`}
+                      />
                     ))}
                   </div>
                 )}
-
-                <button
-                  onClick={handleAnalyzeMaterials}
-                  disabled={isAnalyzing || uploadedFiles.length === 0}
-                  className="w-full btn-primary flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      Analyzing Materials...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-5 w-5" />
-                      Analyze & Create Study Notes
-                    </>
-                  )}
-                </button>
               </div>
-            </div>
-
-            {/* Analysis Result */}
-            <div className="card bg-gradient-to-br from-gray-50 to-white">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                AI Study Notes
-              </h2>
-
-              {analysisResult ? (
-                <div className="max-h-[500px] overflow-y-auto">
-                  <MarkdownRenderer content={analysisResult} />
-                </div>
-              ) : (
-                <div className="text-center py-16 text-gray-500">
-                  <div className="bg-gray-100 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <BookOpen className="h-10 w-10 text-gray-300" />
-                  </div>
-                  <p className="font-medium text-gray-600 mb-1">No materials analyzed yet</p>
-                  <p className="text-sm">Upload PDFs, images, or text files to generate study notes</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Study Plan Tab */}
-        {activeTab === 'plan' && (
-          <div className="grid md:grid-cols-2 gap-8">
-            {/* Form */}
-            <div className="card">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Target className="h-5 w-5 text-primary-600" />
-                Create Your Study Plan
-              </h2>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Subject *
-                  </label>
-                  <input
-                    type="text"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    placeholder="e.g., Chemistry, Physics"
-                    className="input-field"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Exam Date *
-                  </label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                    <input
-                      type="date"
-                      value={examDate}
-                      onChange={(e) => setExamDate(e.target.value)}
-                      min={new Date().toISOString().split('T')[0]}
-                      className="input-field pl-10"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Current Level
-                  </label>
-                  <select
-                    value={currentLevel}
-                    onChange={(e) => setCurrentLevel(e.target.value)}
-                    className="input-field"
-                  >
-                    {levelOptions.map(level => (
-                      <option key={level} value={level}>{level}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Topics to Cover (Optional)
-                  </label>
-                  <div className="space-y-2">
-                    {topics.map((topic, index) => (
-                      <div key={index} className="flex gap-2">
-                        <input
-                          type="text"
-                          value={topic}
-                          onChange={(e) => updateTopic(index, e.target.value)}
-                          placeholder={`Topic ${index + 1}`}
-                          className="input-field flex-1"
-                        />
-                        {topics.length > 1 && (
-                          <button
-                            onClick={() => removeTopic(index)}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-xl"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </button>
-                        )}
+              
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {messages.map((msg, i) => (
+                  <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                    {msg.role === 'assistant' && (
+                      <div className="bg-primary-500/20 p-2 rounded-xl h-fit shrink-0">
+                        <Bot className="h-5 w-5 text-primary-400" />
                       </div>
-                    ))}
-                    <button
-                      onClick={addTopic}
-                      className="flex items-center gap-2 text-sm text-primary-600 hover:text-primary-700 font-medium"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add Topic
-                    </button>
+                    )}
+                    <div className={`max-w-[85%] ${
+                      msg.role === 'user' ? 'bg-primary-600 rounded-2xl rounded-br-md' : 'bg-gray-800/80 rounded-2xl rounded-bl-md'
+                    } px-5 py-4`}>
+                      {msg.role === 'user' ? (
+                        <p className="text-gray-100">{msg.content}</p>
+                      ) : (
+                        <MarkdownRenderer content={msg.content} />
+                      )}
+                    </div>
+                    {msg.role === 'user' && (
+                      <div className="bg-gray-700 p-2 rounded-xl h-fit shrink-0">
+                        <User className="h-5 w-5" />
+                      </div>
+                    )}
                   </div>
-                </div>
-
-                {/* File Upload for Study Plan */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <span className="flex items-center gap-2">
-                      <Upload className="h-4 w-4" />
-                      Upload Previous Exams / Textbook (Optional)
-                    </span>
-                  </label>
-                  <FileUploadZone
-                    files={planUploadedFiles}
-                    onFileSelect={handlePlanFileSelect}
-                    onRemove={removePlanFile}
-                    inputRef={planFileInputRef}
-                  />
-                  {planExtractedContent && (
-                    <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
-                      <CheckCircle className="h-3 w-3" />
-                      Content extracted - AI will use this for your plan
+                ))}
+                
+                {isLoading && (
+                  <div className="flex gap-3">
+                    <div className="bg-primary-500/20 p-2 rounded-xl h-fit">
+                      <Bot className="h-5 w-5 text-primary-400" />
+                    </div>
+                    <div className="bg-gray-800 rounded-2xl px-5 py-4">
+                      <div className="flex gap-1">
+                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" />
+                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+              
+              {/* Input */}
+              <div className="p-4 border-t border-gray-800 bg-gray-900/50">
+                {lessonContent[currentStep]?.checkQuestion && !messages.some(m => m.role === 'user') && (
+                  <div className="bg-primary-500/10 border border-primary-500/30 rounded-xl p-3 mb-3">
+                    <p className="text-sm text-primary-300">
+                      <Sparkles className="h-4 w-4 inline mr-2" />
+                      {lessonContent[currentStep].checkQuestion}
                     </p>
-                  )}
+                  </div>
+                )}
+                
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleStepResponse()}
+                    placeholder="Type your answer or ask a question..."
+                    className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-primary-500"
+                  />
+                  <button 
+                    onClick={handleStepResponse}
+                    disabled={!input.trim() || isLoading}
+                    className="bg-primary-600 hover:bg-primary-500 disabled:opacity-50 p-3 rounded-xl"
+                  >
+                    <Send className="h-5 w-5" />
+                  </button>
                 </div>
-
-                <button
-                  onClick={handleGeneratePlan}
-                  disabled={isGenerating}
-                  className="w-full btn-primary flex items-center justify-center gap-2"
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      Generating Plan...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-5 w-5" />
-                      Generate Study Plan
-                    </>
-                  )}
-                </button>
               </div>
             </div>
-
-            {/* Result */}
-            <div className="card bg-gradient-to-br from-gray-50 to-white">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                Your Study Plan
-              </h2>
-
-              {studyPlan ? (
-                <div className="max-h-[600px] overflow-y-auto">
-                  <MarkdownRenderer content={studyPlan} />
-                </div>
-              ) : (
-                <div className="text-center py-12 text-gray-500">
-                  <Target className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                  <p>Fill in the details and generate your personalized study plan</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Practice Questions Tab */}
-        {activeTab === 'practice' && (
-          <div className="grid md:grid-cols-2 gap-8">
-            {/* Form */}
-            <div className="card">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Brain className="h-5 w-5 text-primary-600" />
-                Generate Practice Questions
-              </h2>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Subject *
-                  </label>
-                  <input
-                    type="text"
-                    value={practiceSubject}
-                    onChange={(e) => setPracticeSubject(e.target.value)}
-                    placeholder="e.g., Chemistry, Physics"
-                    className="input-field"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Topic *
-                  </label>
-                  <input
-                    type="text"
-                    value={practiceTopic}
-                    onChange={(e) => setPracticeTopic(e.target.value)}
-                    placeholder="e.g., Thermodynamics, Organic Chemistry"
-                    className="input-field"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Difficulty
-                    </label>
-                    <select
-                      value={difficulty}
-                      onChange={(e) => setDifficulty(e.target.value)}
-                      className="input-field"
-                    >
-                      {difficultyOptions.map(d => (
-                        <option key={d} value={d}>{d}</option>
+          )}
+          
+          {/* QUIZ */}
+          {view === 'quiz' && (
+            <div className="max-w-2xl mx-auto p-6">
+              <div className="bg-gray-900/50 rounded-2xl border border-gray-800 p-6">
+                {isGenerating ? (
+                  <div className="text-center py-12">
+                    <Loader2 className="h-12 w-12 text-primary-500 animate-spin mx-auto mb-4" />
+                    <p className="text-gray-400">Generating quiz questions...</p>
+                  </div>
+                ) : questions.length > 0 ? (
+                  <>
+                    <div className="flex items-center justify-between mb-6">
+                      <span className="text-sm text-gray-500">Question {currentQ + 1} of {questions.length}</span>
+                      <div className="flex gap-1">
+                        {questions.map((_, i) => (
+                          <div key={i} className={`w-3 h-3 rounded-full ${
+                            i < currentQ ? (answers[i]?.correct ? 'bg-green-500' : 'bg-red-500') : 
+                            i === currentQ ? 'bg-primary-500' : 'bg-gray-700'
+                          }`} />
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div className="mb-6 text-lg">
+                      <MarkdownRenderer content={questions[currentQ]?.question} />
+                    </div>
+                    
+                    <div className="space-y-3 mb-6">
+                      {questions[currentQ]?.options.map((opt, i) => (
+                        <button
+                          key={i}
+                          onClick={() => handleQuizAnswer(i)}
+                          disabled={showExplanation}
+                          className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                            showExplanation
+                              ? i === questions[currentQ].correct ? 'border-green-500 bg-green-500/10' : i === selectedAnswer ? 'border-red-500 bg-red-500/10' : 'border-gray-800'
+                              : selectedAnswer === i ? 'border-primary-500 bg-primary-500/10' : 'border-gray-800 hover:border-gray-700'
+                          }`}
+                        >
+                          <MarkdownRenderer content={opt} />
+                        </button>
                       ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Questions
-                    </label>
-                    <input
-                      type="number"
-                      value={questionCount}
-                      onChange={(e) => setQuestionCount(parseInt(e.target.value) || 5)}
-                      min={1}
-                      max={20}
-                      className="input-field"
-                    />
-                  </div>
-                </div>
-
-                {/* File Upload for Practice Questions */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <span className="flex items-center gap-2">
-                      <Upload className="h-4 w-4" />
-                      Upload Sample Questions / Textbook (Optional)
-                    </span>
-                  </label>
-                  <FileUploadZone
-                    files={practiceUploadedFiles}
-                    onFileSelect={handlePracticeFileSelect}
-                    onRemove={removePracticeFile}
-                    inputRef={practiceFileInputRef}
-                  />
-                  {practiceExtractedContent && (
-                    <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
-                      <CheckCircle className="h-3 w-3" />
-                      Content extracted - AI will generate similar questions
+                    </div>
+                    
+                    {showExplanation && (
+                      <div className={`p-4 rounded-xl mb-6 ${answers[currentQ]?.correct ? 'bg-green-500/10 border border-green-500/30' : 'bg-amber-500/10 border border-amber-500/30'}`}>
+                        <p className={`font-medium mb-2 ${answers[currentQ]?.correct ? 'text-green-400' : 'text-amber-400'}`}>
+                          {answers[currentQ]?.correct ? '✓ Correct!' : '✗ Not quite'}
+                        </p>
+                        <MarkdownRenderer content={questions[currentQ]?.explanation} />
+                      </div>
+                    )}
+                    
+                    <div className="flex gap-3">
+                      {!showExplanation ? (
+                        <button onClick={submitQuizAnswer} disabled={selectedAnswer === null} className="flex-1 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 py-3 rounded-xl font-medium">
+                          Check Answer
+                        </button>
+                      ) : (
+                        <button onClick={nextQuizQuestion} className="flex-1 bg-primary-600 hover:bg-primary-500 py-3 rounded-xl font-medium flex items-center justify-center gap-2">
+                          {currentQ < questions.length - 1 ? 'Next Question' : 'See Results'} <ChevronRight className="h-5 w-5" />
+                        </button>
+                      )}
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          )}
+          
+          {/* RESULTS */}
+          {view === 'results' && (
+            <div className="max-w-2xl mx-auto p-6">
+              <div className="bg-gray-900/50 rounded-2xl border border-gray-800 p-8 text-center">
+                {assessmentResults ? (
+                  // Assessment Results
+                  <>
+                    <div className={`w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center ${
+                      assessmentResults.percentage >= 70 ? 'bg-green-500/20' : assessmentResults.percentage >= 40 ? 'bg-amber-500/20' : 'bg-primary-500/20'
+                    }`}>
+                      <span className={`text-4xl font-bold ${
+                        assessmentResults.percentage >= 70 ? 'text-green-400' : assessmentResults.percentage >= 40 ? 'text-amber-400' : 'text-primary-400'
+                      }`}>
+                        {assessmentResults.percentage}%
+                      </span>
+                    </div>
+                    
+                    <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full mb-4 ${
+                      assessmentResults.level === 'Advanced' ? 'bg-green-500/20 text-green-400' :
+                      assessmentResults.level === 'Intermediate' ? 'bg-amber-500/20 text-amber-400' :
+                      'bg-primary-500/20 text-primary-400'
+                    }`}>
+                      <Star className="h-4 w-4" />
+                      {assessmentResults.level} Level
+                    </div>
+                    
+                    <h2 className="text-2xl font-bold mb-2">Assessment Complete!</h2>
+                    <p className="text-gray-400 mb-6">{assessmentResults.message}</p>
+                    
+                    <div className="text-left bg-gray-800/50 rounded-xl p-4 mb-6">
+                      <h3 className="font-medium mb-3">Your Performance by Topic:</h3>
+                      <div className="space-y-2">
+                        {Object.entries(assessmentResults.byTopic).map(([topic, data]) => (
+                          <div key={topic} className="flex items-center gap-3">
+                            <div className="flex-1">
+                              <div className="flex justify-between text-sm mb-1">
+                                <span className="text-gray-300">{topic}</span>
+                                <span className={data.correct === data.total ? 'text-green-400' : 'text-gray-400'}>
+                                  {data.correct}/{data.total}
+                                </span>
+                              </div>
+                              <div className="bg-gray-700 rounded-full h-2">
+                                <div 
+                                  className={`h-2 rounded-full ${data.correct === data.total ? 'bg-green-500' : 'bg-primary-500'}`}
+                                  style={{ width: `${(data.correct / data.total) * 100}%` }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <button 
+                      onClick={() => { setAssessmentResults(null); setView('course') }}
+                      className="w-full bg-primary-600 hover:bg-primary-500 py-3 rounded-xl font-medium flex items-center justify-center gap-2"
+                    >
+                      Start Learning <ArrowRight className="h-5 w-5" />
+                    </button>
+                  </>
+                ) : (
+                  // Quiz Results
+                  <>
+                    <div className={`w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center ${
+                      answers.filter(a => a.correct).length >= 4 ? 'bg-green-500/20' : 
+                      answers.filter(a => a.correct).length >= 2 ? 'bg-amber-500/20' : 'bg-red-500/20'
+                    }`}>
+                      <Trophy className={`h-10 w-10 ${
+                        answers.filter(a => a.correct).length >= 4 ? 'text-green-400' : 
+                        answers.filter(a => a.correct).length >= 2 ? 'text-amber-400' : 'text-red-400'
+                      }`} />
+                    </div>
+                    
+                    <h2 className="text-2xl font-bold mb-2">Quiz Complete!</h2>
+                    <p className="text-4xl font-bold text-primary-400 mb-6">
+                      {answers.filter(a => a.correct).length}/{questions.length}
                     </p>
-                  )}
-                </div>
-
-                <button
-                  onClick={handleGenerateQuestions}
-                  disabled={isGenerating}
-                  className="w-full btn-primary flex items-center justify-center gap-2"
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      Generating Questions...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-5 w-5" />
-                      Generate Questions
-                    </>
-                  )}
+                    
+                    <div className="text-left mb-6">
+                      <h3 className="font-medium mb-3">Your Answers:</h3>
+                      <div className="space-y-2">
+                        {questions.map((q, i) => (
+                          <div key={i} className={`p-3 rounded-lg ${answers[i]?.correct ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                            <div className="flex items-start gap-2">
+                              {answers[i]?.correct ? (
+                                <Check className="h-5 w-5 text-green-400 shrink-0 mt-0.5" />
+                              ) : (
+                                <X className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                              )}
+                              <div className="text-sm">
+                                <MarkdownRenderer content={q.question} />
+                                {!answers[i]?.correct && (
+                                  <p className="text-green-400 mt-1">Correct: {q.options[q.correct]}</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {answers.filter(a => !a.correct).length > 0 && (
+                      <div className="bg-gray-800 rounded-xl p-4 mb-6 text-left">
+                        <div className="flex items-center gap-2 mb-2">
+                          <HelpCircle className="h-5 w-5 text-primary-400" />
+                          <span className="font-medium">Need help understanding?</span>
+                        </div>
+                        <p className="text-sm text-gray-400 mb-3">I can explain the questions you got wrong.</p>
+                        <button
+                          onClick={() => {
+                            setMessages([{
+                              role: 'assistant',
+                              content: `I noticed you had some trouble with a few questions. Let me help! 🎯\n\nWhich one would you like me to explain?\n\n${questions.filter((_, i) => !answers[i]?.correct).map((q, i) => `${i + 1}. ${q.question}`).join('\n\n')}`
+                            }])
+                            setView('lesson-step')
+                          }}
+                          className="bg-primary-600 hover:bg-primary-500 px-4 py-2 rounded-lg text-sm font-medium"
+                        >
+                          Get AI Help
+                        </button>
+                      </div>
+                    )}
+                    
+                    <div className="flex gap-3">
+                      <button onClick={() => setView('course')} className="flex-1 bg-gray-800 hover:bg-gray-700 py-3 rounded-xl font-medium">
+                        Back to Course
+                      </button>
+                      <button onClick={() => startQuiz(activeLesson)} className="flex-1 bg-primary-600 hover:bg-primary-500 py-3 rounded-xl font-medium flex items-center justify-center gap-2">
+                        <RotateCcw className="h-4 w-4" /> Retry Quiz
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+      
+      {/* New Course Modal */}
+      {showNewCourse && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-900 rounded-2xl border border-gray-800 w-full max-w-lg">
+            <div className="p-6 border-b border-gray-800">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold">Create New Course</h2>
+                <button onClick={() => setShowNewCourse(false)} className="p-2 hover:bg-gray-800 rounded-lg">
+                  <X className="h-5 w-5 text-gray-400" />
                 </button>
               </div>
             </div>
-
-            {/* Result */}
-            <div className="card bg-gradient-to-br from-gray-50 to-white">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                Practice Questions
-              </h2>
-
-              {practiceQuestions ? (
-                <div className="max-h-[600px] overflow-y-auto">
-                  <MarkdownRenderer content={practiceQuestions} />
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Subject Name *</label>
+                <input
+                  type="text"
+                  value={subjectName}
+                  onChange={(e) => setSubjectName(e.target.value)}
+                  placeholder="e.g., Physics, Calculus, Chemistry"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Exam Date (Optional)</label>
+                <input
+                  type="date"
+                  value={examDate}
+                  onChange={(e) => setExamDate(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Upload Study Materials *</label>
+                <div
+                  onClick={() => subjectName.trim() && fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+                    subjectName.trim() ? 'border-gray-700 hover:border-primary-500 hover:bg-primary-500/5' : 'border-gray-800 opacity-50 cursor-not-allowed'
+                  }`}
+                >
+                  {isProcessing ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 className="h-10 w-10 text-primary-500 animate-spin" />
+                      <p className="text-primary-400">{processingStatus}</p>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="h-10 w-10 text-gray-500 mx-auto mb-3" />
+                      <p className="text-gray-400 mb-1">{subjectName.trim() ? 'Click to upload files' : 'Enter subject name first'}</p>
+                      <p className="text-xs text-gray-600">PDF, Images, or Text files</p>
+                    </>
+                  )}
                 </div>
-              ) : (
-                <div className="text-center py-12 text-gray-500">
-                  <Brain className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                  <p>Select a subject and topic to generate practice questions</p>
-                </div>
-              )}
+                <input ref={fileInputRef} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.txt,.md" onChange={handleFileUpload} className="hidden" />
+              </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+      
+      {/* Share Modal */}
+      {showShareModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-900 rounded-2xl border border-gray-800 w-full max-w-md">
+            <div className="p-6 border-b border-gray-800">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <Share2 className="h-5 w-5 text-primary-400" />
+                  Share Course
+                </h2>
+                <button onClick={() => setShowShareModal(false)} className="p-2 hover:bg-gray-800 rounded-lg">
+                  <X className="h-5 w-5 text-gray-400" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-gray-400 mb-4">
+                Share this link with friends. They'll need to create an account and take their own assessment before starting.
+              </p>
+              
+              <div className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  value={shareLink}
+                  readOnly
+                  className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-300 text-sm"
+                />
+                <button
+                  onClick={copyShareLink}
+                  className={`px-4 py-3 rounded-xl font-medium flex items-center gap-2 transition-colors ${
+                    copySuccess ? 'bg-green-600 text-white' : 'bg-primary-600 hover:bg-primary-500 text-white'
+                  }`}
+                >
+                  {copySuccess ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+                </button>
+              </div>
+              
+              <div className="bg-gray-800/50 rounded-xl p-4">
+                <h4 className="font-medium mb-2 flex items-center gap-2">
+                  <Users className="h-4 w-4 text-primary-400" />
+                  What happens when they open this link:
+                </h4>
+                <ul className="text-sm text-gray-400 space-y-1">
+                  <li>• They'll be asked to create an account</li>
+                  <li>• They take their own assessment quiz</li>
+                  <li>• The course is saved to their account</li>
+                  <li>• Their progress is tracked separately</li>
+                </ul>
+              </div>
+              
+              <p className="text-xs text-gray-600 mt-4 text-center">
+                Link expires in 7 days
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

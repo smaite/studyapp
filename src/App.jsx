@@ -1,17 +1,59 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { useState, createContext } from 'react'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import Landing from './pages/Landing'
 import Subjects from './pages/Subjects'
 import Tutor from './pages/Tutor'
 import ExamPrep from './pages/ExamPrep'
+import Login from './pages/Login'
+import Signup from './pages/Signup'
+import { Loader2 } from 'lucide-react'
 
 export const AppContext = createContext()
 
-function App() {
+// Protected Route wrapper
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth()
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+      </div>
+    )
+  }
+  
+  if (!user) {
+    return <Navigate to="/login" />
+  }
+  
+  return children
+}
+
+// Public route that redirects to app if logged in
+function PublicRoute({ children }) {
+  const { user, loading } = useAuth()
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+      </div>
+    )
+  }
+  
+  if (user) {
+    return <Navigate to="/exam-prep" />
+  }
+  
+  return children
+}
+
+function AppRoutes() {
   const [selectedSubject, setSelectedSubject] = useState(null)
-  const [chatHistory, setChatHistory] = useState([])
+  const [chatHistory, setChatHistory] = useState({})
 
   const contextValue = {
     selectedSubject,
@@ -22,22 +64,67 @@ function App() {
 
   return (
     <AppContext.Provider value={contextValue}>
-      <Router>
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex flex-col">
-          <Navbar />
-          <main className="flex-grow">
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/subjects" element={<Subjects />} />
-              <Route path="/tutor" element={<Tutor />} />
-              <Route path="/tutor/:subject" element={<Tutor />} />
-              <Route path="/exam-prep" element={<ExamPrep />} />
-            </Routes>
-          </main>
-          <Footer />
-        </div>
-      </Router>
+      <Routes>
+        {/* Auth Routes */}
+        <Route path="/login" element={
+          <PublicRoute><Login /></PublicRoute>
+        } />
+        <Route path="/signup" element={
+          <PublicRoute><Signup /></PublicRoute>
+        } />
+        
+        {/* Public Landing */}
+        <Route path="/" element={
+          <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex flex-col">
+            <Navbar />
+            <main className="flex-grow"><Landing /></main>
+            <Footer />
+          </div>
+        } />
+        
+        {/* Protected Routes */}
+        <Route path="/subjects" element={
+          <ProtectedRoute>
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex flex-col">
+              <Navbar />
+              <main className="flex-grow"><Subjects /></main>
+              <Footer />
+            </div>
+          </ProtectedRoute>
+        } />
+        <Route path="/tutor" element={
+          <ProtectedRoute>
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex flex-col">
+              <Navbar />
+              <main className="flex-grow"><Tutor /></main>
+            </div>
+          </ProtectedRoute>
+        } />
+        <Route path="/tutor/:subject" element={
+          <ProtectedRoute>
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex flex-col">
+              <Navbar />
+              <main className="flex-grow"><Tutor /></main>
+            </div>
+          </ProtectedRoute>
+        } />
+        <Route path="/exam-prep" element={
+          <ProtectedRoute>
+            <ExamPrep />
+          </ProtectedRoute>
+        } />
+      </Routes>
     </AppContext.Provider>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <AppRoutes />
+      </Router>
+    </AuthProvider>
   )
 }
 
