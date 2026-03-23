@@ -13,12 +13,12 @@ const renderMath = (math, displayMode = false) => {
     })
   } catch (e) {
     console.warn('KaTeX error:', e)
-    return `<span class="text-yellow-300 font-mono text-sm">${math}</span>`
+    return `<span class="text-amber-400 font-mono text-sm">${math}</span>`
   }
 }
 
 // Enhanced markdown parser for AI responses with math support
-// Supports dark mode by default
+// Optimized for dark mode with excellent contrast
 export default function MarkdownRenderer({ content, className = '' }) {
   const htmlContent = useMemo(() => {
     if (!content) return ''
@@ -58,26 +58,26 @@ export default function MarkdownRenderer({ content, className = '' }) {
     html = html.replace(/&(?!#?\w+;)/g, '&amp;')
     html = html.replace(/<(?![/]?(?:span|div|svg|path|semantics|annotation|math|mrow|mi|mn|mo|mfrac|msup|msub|munder|mover|mspace|mtext|mstyle|mglyph|mpadded|mphantom|menclose|mfenced|mtable|mtr|mtd|maligngroup|malignmark|mscarries|mscarry|msline|msgroup|msrow|ms|mstack|mlongdiv|mlabeledtr|none|mprescripts|mmultiscripts)[^>]*>)/g, '&lt;')
     
-    // Inline code (after escaping) - dark mode
-    html = html.replace(/`([^`]+)`/g, '<code class="bg-gray-700 text-primary-300 px-1.5 py-0.5 rounded text-sm font-mono">$1</code>')
+    // Inline code (after escaping) - dark mode with cyan accent
+    html = html.replace(/`([^`]+)`/g, '<code class="bg-primary-500/20 text-primary-300 px-1.5 py-0.5 rounded text-sm font-mono">$1</code>')
     
-    // Headers - bright white/yellow text for better visibility in dark mode
-    html = html.replace(/^#### (.*$)/gm, '<h4 class="text-base font-bold text-yellow-300 mt-5 mb-2">$1</h4>')
-    html = html.replace(/^### (.*$)/gm, '<h3 class="text-lg font-bold text-yellow-200 mt-5 mb-2">$1</h3>')
-    html = html.replace(/^## (.*$)/gm, '<h2 class="text-xl font-bold text-yellow-100 mt-6 mb-3">$1</h2>')
+    // Headers - white text with size hierarchy
+    html = html.replace(/^#### (.*$)/gm, '<h4 class="text-base font-semibold text-white mt-4 mb-2">$1</h4>')
+    html = html.replace(/^### (.*$)/gm, '<h3 class="text-lg font-semibold text-white mt-5 mb-2">$1</h3>')
+    html = html.replace(/^## (.*$)/gm, '<h2 class="text-xl font-bold text-white mt-6 mb-3">$1</h2>')
     html = html.replace(/^# (.*$)/gm, '<h1 class="text-2xl font-bold text-white mt-6 mb-3">$1</h1>')
     
-    // Bold and italic - bright text
+    // Bold and italic - high contrast
     html = html.replace(/\*\*\*(.*?)\*\*\*/g, '<strong class="font-bold text-white"><em>$1</em></strong>')
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-white">$1</strong>')
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-white">$1</strong>')
     html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em class="italic text-gray-100">$1</em>')
     
-    // Lists - unordered - bright text
-    html = html.replace(/^\* (.*$)/gm, '<li class="ml-5 list-disc text-gray-100 my-1 pl-1">$1</li>')
-    html = html.replace(/^- (.*$)/gm, '<li class="ml-5 list-disc text-gray-100 my-1 pl-1">$1</li>')
+    // Lists - unordered - clear visibility
+    html = html.replace(/^\* (.*$)/gm, '<li class="ml-5 list-disc text-gray-200 my-1.5 pl-1">$1</li>')
+    html = html.replace(/^- (.*$)/gm, '<li class="ml-5 list-disc text-gray-200 my-1.5 pl-1">$1</li>')
     
     // Lists - ordered
-    html = html.replace(/^\d+\. (.*$)/gm, '<li class="ml-5 list-decimal text-gray-100 my-1 pl-1">$1</li>')
+    html = html.replace(/^\d+\. (.*$)/gm, '<li class="ml-5 list-decimal text-gray-200 my-1.5 pl-1">$1</li>')
     
     // Wrap consecutive list items
     html = html.replace(/(<li[^>]*>[\s\S]*?<\/li>\s*)+/g, (match) => {
@@ -86,39 +86,39 @@ export default function MarkdownRenderer({ content, className = '' }) {
       return `<${tag} class="my-3 space-y-1">${match}</${tag}>`
     })
     
-    // Blockquotes - dark mode
-    html = html.replace(/^&gt; (.*$)/gm, '<blockquote class="border-l-4 border-primary-500 pl-4 py-2 my-4 bg-gray-800/50 rounded-r-lg text-gray-100 italic">$1</blockquote>')
+    // Blockquotes - dark mode with accent border
+    html = html.replace(/^&gt; (.*$)/gm, '<blockquote class="border-l-4 border-primary-500 pl-4 py-2 my-4 bg-primary-500/10 rounded-r-lg text-gray-200">$1</blockquote>')
     
     // Horizontal rule
-    html = html.replace(/^---$/gm, '<hr class="my-6 border-gray-700" />')
+    html = html.replace(/^---$/gm, '<hr class="my-6 border-white/10" />')
     
-    // Links
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary-400 hover:text-primary-300 underline" target="_blank" rel="noopener noreferrer">$1</a>')
+    // Links - primary color
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary-400 hover:text-primary-300 underline underline-offset-2" target="_blank" rel="noopener noreferrer">$1</a>')
     
-    // Restore code blocks - dark theme
+    // Restore code blocks - dark theme with border
     codeBlocks.forEach(({ lang, code }, id) => {
       const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      html = html.replace(`__CODE_BLOCK_${id}__`, `<pre class="bg-gray-950 text-gray-100 p-4 rounded-xl overflow-x-auto my-4 text-sm border border-gray-800"><code>${escaped}</code></pre>`)
+      html = html.replace(`__CODE_BLOCK_${id}__`, `<pre class="bg-[#0a0a12] text-gray-100 p-4 rounded-xl overflow-x-auto my-4 text-sm border border-white/5"><code>${escaped}</code></pre>`)
     })
     
     // Restore math blocks with rendered KaTeX
     mathBlocks.forEach(({ math, display }, id) => {
       const rendered = renderMath(math, display)
       if (display) {
-        html = html.replace(`__MATH_BLOCK_${id}__`, `<div class="my-4 overflow-x-auto">${rendered}</div>`)
+        html = html.replace(`__MATH_BLOCK_${id}__`, `<div class="my-4 overflow-x-auto py-2">${rendered}</div>`)
       } else {
-        html = html.replace(`__MATH_BLOCK_${id}__`, `<span class="inline-block">${rendered}</span>`)
+        html = html.replace(`__MATH_BLOCK_${id}__`, `<span class="inline-block align-middle">${rendered}</span>`)
       }
     })
     
-    // Paragraphs - wrap remaining text blocks - bright text for readability
+    // Paragraphs - wrap remaining text blocks - good contrast
     html = html.split('\n\n').map(block => {
       if (!block.trim()) return ''
       // Don't wrap if already has block-level HTML
       if (block.match(/^<(h[1-6]|ul|ol|pre|blockquote|hr|div)/)) {
         return block
       }
-      return `<p class="text-gray-100 leading-relaxed my-2">${block}</p>`
+      return `<p class="text-gray-200 leading-relaxed my-2">${block}</p>`
     }).join('')
     
     // Single line breaks within paragraphs

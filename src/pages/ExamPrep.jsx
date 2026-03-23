@@ -6,10 +6,13 @@ import {
   Play, Lock, Check, PenTool, MessageSquare, Plus,
   Layers, Clock, BarChart3, HelpCircle, Search, Share2,
   Home, Calendar, History, Settings, Copy, Users, Link2,
-  ArrowRight, Zap, Star, Menu, ChevronDown, FolderPlus, FileUp
+  ArrowRight, Zap, Star, Menu, ChevronDown, FolderPlus, FileUp,
+  Calculator, PenLine, Camera, ThumbsUp, ThumbsDown, RefreshCw
 } from 'lucide-react'
 import { sendMessage, analyzeImage } from '../services/aiService'
 import MarkdownRenderer from '../components/MarkdownRenderer'
+import MathKeyboard from '../components/MathKeyboard'
+import SolvingSteps from '../components/SolvingSteps'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -79,6 +82,17 @@ export default function ExamPrep() {
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef(null)
   const [lessonContent, setLessonContent] = useState([]) // Steps in lesson
+  
+  // AI Tutor Chat
+  const [chatMessages, setChatMessages] = useState([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const [showMathKeyboard, setShowMathKeyboard] = useState(false)
+  const [mathMode, setMathMode] = useState(false)
+  const chatInputRef = useRef(null)
+  const chatEndRef = useRef(null)
+  const chatFileInputRef = useRef(null)
+  const [chatImage, setChatImage] = useState(null)
   
   // Share modal
   const [showShareModal, setShowShareModal] = useState(false)
@@ -864,6 +878,100 @@ Return ONLY valid JSON array:
         setView('home') 
       }
     }
+  }
+
+  // === AI TUTOR CHAT FUNCTIONS ===
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
+
+  const handleChatImageUpload = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (e) => setChatImage(e.target.result)
+    reader.readAsDataURL(file)
+  }
+
+  const handleChatKeyboardInsert = (text) => {
+    if (text === 'BACKSPACE') {
+      setChatInput(prev => prev.slice(0, -1))
+    } else if (text === 'CLEAR') {
+      setChatInput('')
+    } else {
+      setChatInput(prev => prev + text)
+    }
+    chatInputRef.current?.focus()
+  }
+
+  const sendChatMessage = async () => {
+    if ((!chatInput.trim() && !chatImage) || chatLoading) return
+
+    const userMessage = { role: 'user', content: chatInput, image: chatImage }
+    setChatMessages(prev => [...prev, userMessage])
+    setChatInput('')
+    setChatImage(null)
+    setChatLoading(true)
+
+    try {
+      let response
+      let parsedSolution = null
+      const isMathProblem = mathMode || /[0-9+\-*/=^√∫∑]/.test(chatInput) || chatImage
+
+      if (isMathProblem && (chatImage || /solve|calculate|find|compute|evaluate|simplify/i.test(chatInput))) {
+        const mathPrompt = `You are an expert math tutor. Solve this problem step by step.
+Format your response as JSON:
+{
+  "steps": [{"description": "Step description", "math": "LaTeX math", "explanation": "Why"}],
+  "solution": "Final answer",
+  "tip": {"title": "Pro tip", "content": "Helpful insight"},
+  "fullExplanation": "Friendly explanation",
+  "followUpQuestions": ["Q1?", "Q2?", "Q3?"]
+}
+Problem: ${chatInput}`
+
+        if (chatImage) {
+          response = await analyzeImage(chatImage, mathPrompt, 'Mathematics')
+        } else {
+          response = await sendMessage([{ role: 'user', content: mathPrompt }], 'Mathematics')
+        }
+
+        try {
+          let jsonStr = response.content
+          const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
+          if (jsonMatch) jsonStr = jsonMatch[1]
+          const start = jsonStr.indexOf('{'), end = jsonStr.lastIndexOf('}')
+          if (start !== -1 && end !== -1) {
+            parsedSolution = JSON.parse(jsonStr.substring(start, end + 1))
+          }
+        } catch (e) { /* not JSON */ }
+      } else if (chatImage) {
+        response = await analyzeImage(chatImage, chatInput, 'General')
+      } else {
+        const apiMsgs = chatMessages.slice(-10).map(m => ({ role: m.role, content: m.content }))
+        apiMsgs.push({ role: 'user', content: chatInput })
+        response = await sendMessage(apiMsgs, 'AI Tutor')
+      }
+
+      setChatMessages(prev => [...prev, {
+        role: 'assistant',
+        content: parsedSolution?.fullExplanation || response.content,
+        solution: parsedSolution
+      }])
+    } catch (error) {
+      setChatMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `Error: ${error.message}. Make sure AI proxy is running.`,
+        isError: true
+      }])
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
+  const handleChatFollowUp = (q) => {
+    setChatInput(q)
+    setTimeout(sendChatMessage, 100)
   }
 
   const daysUntil = (date) => date ? Math.ceil((new Date(date) - new Date()) / 86400000) : null
@@ -1722,6 +1830,201 @@ Return ONLY valid JSON array:
               </div>
             </div>
           )}
+
+          {/* AI Tutor Chat View */}
+          {view === 'chat' && (
+            <div className="h-full flex flex-col bg-gray-950">
+              {/* Chat Header */}
+              <div className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="bg-primary-500/20 p-2 rounded-xl">
+                    <Bot className="h-5 w-5 text-primary-400" />
+                  </div>
+                  <div>
+                    <h1 className="font-semibold text-white">AI Tutor</h1>
+                    <p className="text-xs text-gray-400">Ask me anything</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setMathMode(!mathMode)}
+                    className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                      mathMode ? 'bg-primary-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    <Calculator className="h-4 w-4" />
+                    <span className="hidden sm:inline">Math</span>
+                  </button>
+                  <button
+                    onClick={() => { setChatMessages([]); setMathMode(false) }}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg"
+                    title="Clear chat"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {chatMessages.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                    <div className="bg-primary-500/20 p-4 rounded-2xl mb-4">
+                      {mathMode ? <Calculator className="h-10 w-10 text-primary-400" /> : <Sparkles className="h-10 w-10 text-primary-400" />}
+                    </div>
+                    <h2 className="text-xl font-semibold text-white mb-2">
+                      {mathMode ? 'Math Solver' : 'AI Tutor'}
+                    </h2>
+                    <p className="text-gray-400 max-w-md mb-6">
+                      {mathMode 
+                        ? 'Type a problem or upload a photo for step-by-step solutions'
+                        : 'Ask me anything! I can explain concepts, solve problems, or help you study.'
+                      }
+                    </p>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {(mathMode 
+                        ? ['Solve 2x + 5 = 15', 'Find derivative of x²', 'Calculate √144']
+                        : ['Explain quantum physics', 'Help me with essay writing', 'Quiz me on history']
+                      ).map((s, i) => (
+                        <button key={i} onClick={() => setChatInput(s)}
+                          className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-full text-sm text-gray-300 hover:bg-gray-700">
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {chatMessages.map((msg, idx) => (
+                  <div key={idx} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    {msg.role === 'assistant' && (
+                      <div className="bg-primary-500/20 p-2 rounded-xl h-fit shrink-0">
+                        <Bot className="h-5 w-5 text-primary-400" />
+                      </div>
+                    )}
+                    
+                    <div className={`max-w-[85%] ${msg.role === 'user' ? '' : 'space-y-3'}`}>
+                      {msg.role === 'user' ? (
+                        <div className="bg-primary-600 text-white rounded-2xl rounded-br-md px-4 py-3">
+                          {msg.image && <img src={msg.image} alt="Upload" className="max-h-40 rounded-lg mb-2" />}
+                          <p className="whitespace-pre-wrap">{msg.content}</p>
+                        </div>
+                      ) : (
+                        <>
+                          {msg.solution?.steps && (
+                            <SolvingSteps steps={msg.solution.steps} solution={msg.solution.solution} tip={msg.solution.tip} />
+                          )}
+                          
+                          {msg.solution && (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <button onClick={() => handleChatFollowUp('Give me a similar problem')}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-full text-sm text-gray-300">
+                                <RefreshCw className="h-3 w-3" /> Similar
+                              </button>
+                            </div>
+                          )}
+                          
+                          <div className="bg-gray-800/50 rounded-2xl p-4 border border-gray-700">
+                            <MarkdownRenderer content={msg.content} />
+                          </div>
+                          
+                          <div className="flex items-center gap-2 text-gray-500">
+                            <button className="p-1.5 hover:bg-gray-800 rounded-lg"><ThumbsUp className="h-4 w-4" /></button>
+                            <button className="p-1.5 hover:bg-gray-800 rounded-lg"><ThumbsDown className="h-4 w-4" /></button>
+                          </div>
+                          
+                          {msg.solution?.followUpQuestions && (
+                            <div className="space-y-2">
+                              {msg.solution.followUpQuestions.slice(0, 3).map((q, i) => (
+                                <button key={i} onClick={() => handleChatFollowUp(q)}
+                                  className="block w-full text-left px-4 py-2 bg-gray-800/50 hover:bg-gray-800 border border-gray-700 rounded-xl text-gray-300 text-sm">
+                                  {q}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    
+                    {msg.role === 'user' && (
+                      <div className="bg-gray-700 p-2 rounded-xl h-fit shrink-0">
+                        <User className="h-5 w-5 text-gray-300" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {chatLoading && (
+                  <div className="flex gap-3 justify-start">
+                    <div className="bg-primary-500/20 p-2 rounded-xl h-fit">
+                      <Bot className="h-5 w-5 text-primary-400" />
+                    </div>
+                    <div className="bg-gray-800/50 rounded-2xl px-4 py-3 border border-gray-700 flex items-center gap-2 text-gray-300">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>{mathMode ? 'Solving...' : 'Thinking...'}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Input Area */}
+              <div className="border-t border-gray-800 bg-gray-900/50 shrink-0">
+                {chatImage && (
+                  <div className="p-3 border-b border-gray-800">
+                    <div className="relative inline-block">
+                      <img src={chatImage} alt="Preview" className="h-16 rounded-lg" />
+                      <button onClick={() => setChatImage(null)}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-3">
+                  <div className="bg-gray-800 rounded-xl border border-gray-700 focus-within:border-primary-500 transition-colors">
+                    <input
+                      ref={chatInputRef}
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && sendChatMessage()}
+                      placeholder={mathMode ? "Type a math problem..." : "Ask me anything..."}
+                      className="w-full bg-transparent px-4 py-3 text-white placeholder-gray-500 focus:outline-none"
+                    />
+                    
+                    <div className="flex items-center justify-between px-3 pb-3">
+                      <div className="flex items-center gap-1">
+                        <input type="file" ref={chatFileInputRef} onChange={handleChatImageUpload} accept="image/*" className="hidden" />
+                        <button onClick={() => chatFileInputRef.current?.click()}
+                          className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg">
+                          <Camera className="h-5 w-5" />
+                        </button>
+                        {mathMode && (
+                          <button onClick={() => setShowMathKeyboard(!showMathKeyboard)}
+                            className={`p-2 rounded-lg ${showMathKeyboard ? 'text-primary-400 bg-primary-500/20' : 'text-gray-400 hover:text-white hover:bg-gray-700'}`}>
+                            <PenLine className="h-5 w-5" />
+                          </button>
+                        )}
+                      </div>
+                      <button onClick={sendChatMessage} disabled={(!chatInput.trim() && !chatImage) || chatLoading}
+                        className="p-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white rounded-lg">
+                        {chatLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {showMathKeyboard && mathMode && (
+                  <MathKeyboard onInsert={handleChatKeyboardInsert} onClose={() => setShowMathKeyboard(false)} />
+                )}
+              </div>
+            </div>
+          )}
         </main>
       </div>
       
@@ -1914,35 +2217,55 @@ Return ONLY valid JSON array:
       )}
       
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f0f15]/95 backdrop-blur-xl border-t border-gray-800/50 px-4 py-2 safe-area-bottom z-40">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f0f15]/95 backdrop-blur-xl border-t border-gray-800/50 px-2 py-2 safe-area-bottom z-40">
         <div className="flex items-center justify-around max-w-md mx-auto">
           <button
             onClick={() => { setView('home'); setActiveCourse(null) }}
-            className={`flex flex-col items-center gap-1 py-2 px-4 rounded-xl transition-colors ${
+            className={`flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-colors ${
               view === 'home' ? 'text-primary-400' : 'text-gray-500'
             }`}
           >
             <Home className="h-5 w-5" />
-            <span className="text-xs">Home</span>
+            <span className="text-[10px]">Home</span>
+          </button>
+          
+          <button
+            onClick={() => setView('chat')}
+            className={`flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-colors ${
+              view === 'chat' ? 'text-primary-400' : 'text-gray-500'
+            }`}
+          >
+            <MessageSquare className="h-5 w-5" />
+            <span className="text-[10px]">AI Tutor</span>
           </button>
           
           <button
             onClick={() => setShowNewCourse(true)}
-            className="flex flex-col items-center gap-1 py-2 px-4 -mt-4"
+            className="flex flex-col items-center gap-0.5 py-1.5 px-3 -mt-4"
           >
-            <div className="bg-primary-600 p-3 rounded-xl shadow-lg shadow-primary-500/30">
+            <div className="bg-primary-600 p-2.5 rounded-xl shadow-lg shadow-primary-500/30">
               <Plus className="h-5 w-5" />
             </div>
           </button>
           
           <button
-            onClick={() => {}}
-            className="flex flex-col items-center gap-1 py-2 px-4 rounded-xl text-gray-500"
+            onClick={() => activeCourse ? setView('course') : null}
+            className={`flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-colors ${
+              view === 'course' ? 'text-primary-400' : 'text-gray-500'
+            } ${!activeCourse ? 'opacity-50' : ''}`}
           >
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white">
+            <BookOpen className="h-5 w-5" />
+            <span className="text-[10px]">Course</span>
+          </button>
+          
+          <button
+            onClick={() => {}}
+            className="flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-gray-500"
+          >
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center text-[10px] font-bold text-white">
               {user?.email?.[0].toUpperCase() || 'U'}
             </div>
-            <span className="text-xs">Profile</span>
+            <span className="text-[10px]">Profile</span>
           </button>
         </div>
       </nav>
