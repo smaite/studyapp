@@ -83,25 +83,25 @@ const stats = [
 
 const products = [
   {
-    title: 'AI Tutor',
-    description: 'Get real-time help tailored to your needs, making complex concepts simple.',
-    icon: MessageSquare,
-    color: 'from-primary-500 to-primary-600',
-    link: '/tutor'
-  },
-  {
-    title: 'Exam Prep',
-    description: 'Upload your study materials, set your exam date, and reach your goals with AI.',
+    title: 'Study Hub',
+    description: 'Upload your study materials, set your exam date, and let AI create personalized lessons.',
     icon: FileText,
-    color: 'from-secondary-500 to-secondary-600',
+    color: 'from-primary-500 to-primary-600',
     link: '/exam-prep'
   },
   {
     title: 'Study Materials',
     description: 'Upload PDFs, images, and notes. AI creates comprehensive study guides instantly.',
     icon: Upload,
-    color: 'from-purple-500 to-purple-600',
+    color: 'from-secondary-500 to-secondary-600',
     link: '/exam-prep'
+  },
+  {
+    title: 'AI Tutor & Math Solver',
+    description: 'Chat with AI for any subject, or solve math problems step-by-step with the math keyboard.',
+    icon: MessageSquare,
+    color: 'from-purple-500 to-purple-600',
+    link: '/tutor'
   }
 ]
 
@@ -137,11 +137,11 @@ export default function Landing() {
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-              <Link to="/tutor" className="btn-primary inline-flex items-center justify-center gap-2 text-lg py-4 px-8">
+              <Link to="/signup" className="btn-primary inline-flex items-center justify-center gap-2 text-lg py-4 px-8">
                 Start Learning Free
                 <ArrowRight className="h-5 w-5" />
               </Link>
-              <Link to="/subjects" className="btn-secondary inline-flex items-center justify-center gap-2 text-lg py-4 px-8">
+              <Link to="/exam-prep" className="btn-secondary inline-flex items-center justify-center gap-2 text-lg py-4 px-8">
                 <Play className="h-5 w-5" />
                 See How It Works
               </Link>

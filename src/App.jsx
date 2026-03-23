@@ -7,7 +7,6 @@ import Landing from './pages/Landing'
 import Subjects from './pages/Subjects'
 import Tutor from './pages/Tutor'
 import ExamPrep from './pages/ExamPrep'
-import MathSolver from './pages/MathSolver'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import { Loader2 } from 'lucide-react'
@@ -114,11 +113,6 @@ function AppRoutes() {
         <Route path="/exam-prep" element={
           <ProtectedRoute>
             <ExamPrep />
-          </ProtectedRoute>
-        } />
-        <Route path="/math-solver" element={
-          <ProtectedRoute>
-            <MathSolver onBack={() => window.history.back()} />
           </ProtectedRoute>
         } />
       </Routes>
