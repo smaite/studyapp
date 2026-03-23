@@ -901,6 +901,78 @@ Return ONLY valid JSON array:
     }
   }
 
+  // Replan/Regenerate course with new language
+  const replanCourse = async (newLanguage = null) => {
+    if (!activeCourse) return
+    
+    const targetLanguage = newLanguage || activeCourse.language || 'English'
+    
+    if (!confirm(`Regenerate all lessons in ${targetLanguage}? This will reset your progress.`)) return
+    
+    setIsProcessing(true)
+    setProcessingStatus(`Regenerating course in ${targetLanguage}...`)
+    
+    try {
+      const lessonsPrompt = `You are a course creator. Analyze this study material and create a detailed course outline.
+
+CRITICAL LANGUAGE REQUIREMENT: 
+- Generate ALL content ONLY in ${targetLanguage} language
+- Do NOT mix languages - use ONLY ${targetLanguage}
+- Lesson titles, descriptions, and key points must ALL be in ${targetLanguage}
+- If the source material is in a different language, translate it to ${targetLanguage}
+
+Study Material:
+${activeCourse.content.substring(0, 15000)}
+
+Create lessons that cover ALL topics from the material. For each lesson:
+1. Give a clear, specific title (ONLY in ${targetLanguage})
+2. Write a 1-2 sentence description (ONLY in ${targetLanguage})  
+3. List 4-6 key concepts/points to cover (ONLY in ${targetLanguage})
+
+Return ONLY valid JSON array (no other text):
+[{"id":1,"title":"विषय नाम","description":"यो के कभर गर्छ","keyPoints":["अवधारणा १","अवधारणा २","अवधारणा ३","अवधारणा ४"]}]
+
+Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targetLanguage} is English.`
+
+      const response = await sendMessage([{ role: 'user', content: lessonsPrompt }], activeCourse.name)
+      
+      let lessonsJson = response.content.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
+      const startIdx = lessonsJson.indexOf('[')
+      const endIdx = lessonsJson.lastIndexOf(']')
+      if (startIdx !== -1 && endIdx !== -1) lessonsJson = lessonsJson.substring(startIdx, endIdx + 1)
+      lessonsJson = lessonsJson.replace(/,(\s*[\]}])/g, '$1')
+      
+      const lessons = JSON.parse(lessonsJson).map((l, idx) => ({
+        ...l, 
+        id: idx + 1, 
+        progress: 0, 
+        quizScore: null, 
+        completed: false,
+        knowledgeLevel: null
+      }))
+
+      const updatedCourse = {
+        ...activeCourse,
+        language: targetLanguage,
+        lessons,
+        totalProgress: 0,
+        needsAssessment: true
+      }
+
+      setCourses(prev => prev.map(c => c.id === activeCourse.id ? updatedCourse : c))
+      setActiveCourse(updatedCourse)
+      setView('assessment')
+      
+      alert(`✅ Course regenerated in ${targetLanguage}! Please take the assessment.`)
+    } catch (error) {
+      console.error('Replan error:', error)
+      alert('Error regenerating course: ' + error.message)
+    } finally {
+      setIsProcessing(false)
+      setProcessingStatus('')
+    }
+  }
+
   // === AI TUTOR CHAT FUNCTIONS ===
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
