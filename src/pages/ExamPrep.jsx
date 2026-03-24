@@ -279,6 +279,28 @@ function InteractiveDiagram({ diagram }) {
   return null
 }
 
+const inferDiagramRequest = (text = '') => {
+  const q = text.toLowerCase()
+  if (q.includes('venn')) {
+    return {
+      type: 'venn',
+      title: 'Interactive Venn Diagram',
+      leftLabel: 'Set A',
+      rightLabel: 'Set B',
+      centerLabel: 'Common'
+    }
+  }
+  if (q.includes('triangle') || q.includes('pythag') || q.includes('right angle')) {
+    return {
+      type: 'triangle',
+      title: 'Interactive Right Triangle',
+      a: 6,
+      b: 8
+    }
+  }
+  return null
+}
+
 export default function ExamPrep() {
   const { user, signOut } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(() => !isMobile())
@@ -367,6 +389,14 @@ export default function ExamPrep() {
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef(null)
   const [lessonContent, setLessonContent] = useState([]) // Steps in lesson
+  const [lessonHistoryByCourse, setLessonHistoryByCourse] = useState(() => {
+    try {
+      const saved = localStorage.getItem(LESSON_HISTORY_KEY)
+      return saved ? JSON.parse(saved) : {}
+    } catch {
+      return {}
+    }
+  })
   
   // AI Tutor Chat
   const [chatMessages, setChatMessages] = useState([])
@@ -433,6 +463,11 @@ export default function ExamPrep() {
   useEffect(() => {
     localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chatHistoryByCourse))
   }, [chatHistoryByCourse])
+
+  // Save lesson history
+  useEffect(() => {
+    localStorage.setItem(LESSON_HISTORY_KEY, JSON.stringify(lessonHistoryByCourse))
+  }, [lessonHistoryByCourse])
   
   // Check and update streak on load
   useEffect(() => {
@@ -1026,10 +1061,20 @@ Return ONLY valid JSON array (no other text):
 
   const startLesson = async (lesson) => {
     setActiveLesson(lesson)
+    setView('lesson-step')
+    const lessonKey = `course_${activeCourse?.id}_lesson_${lesson.id}`
+    const savedLesson = lessonHistoryByCourse[lessonKey]
+
+    if (savedLesson?.messages?.length) {
+      setCurrentStep(savedLesson.currentStep || 0)
+      setLessonContent(savedLesson.lessonContent || [])
+      setMessages(savedLesson.messages || [])
+      return
+    }
+
     setCurrentStep(0)
     setLessonContent([])
     setMessages([])
-    setView('lesson-step')
     setIsLoading(true)
     
     try {
@@ -1132,6 +1177,20 @@ Be encouraging and use emojis!`
       setIsLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (!activeCourse || !activeLesson || view !== 'lesson-step') return
+    const lessonKey = `course_${activeCourse.id}_lesson_${activeLesson.id}`
+    setLessonHistoryByCourse(prev => ({
+      ...prev,
+      [lessonKey]: {
+        currentStep,
+        lessonContent,
+        messages: messages.slice(-200),
+        updatedAt: new Date().toISOString()
+      }
+    }))
+  }, [messages, lessonContent, currentStep, activeCourse, activeLesson, view])
 
   const startQuiz = async (lesson) => {
     setActiveLesson(lesson)
@@ -1647,7 +1706,8 @@ Problem: ${chatInput}`
         role: 'assistant',
         content: parsedSolution?.fullExplanation || response.content,
         solution: parsedSolution,
-        sourceRefs
+        sourceRefs,
+        diagram: inferDiagramRequest(chatInput)
       }])
     } catch (error) {
       setChatMessages(prev => [...prev, {
@@ -2497,13 +2557,13 @@ Problem: ${chatInput}`
                         </div>
                         
                         <div className="flex gap-2">
-                          <button 
-                            onClick={() => startLesson(lesson)}
-                            className="bg-primary-600 hover:bg-primary-500 px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1.5 md:gap-2 active:scale-95 transition-transform"
-                          >
-                            <Play className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                            {lesson.progress > 0 ? 'Continue' : 'Learn'}
-                          </button>
+                    <button 
+                      onClick={() => startLesson(lesson)}
+                      className="bg-primary-600 hover:bg-primary-500 px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1.5 md:gap-2 active:scale-95 transition-transform"
+                    >
+                      <Play className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                      {lesson.progress > 0 || lessonHistoryByCourse[`course_${activeCourse?.id}_lesson_${lesson.id}`]?.messages?.length ? 'Continue' : 'Learn'}
+                    </button>
                           <button 
                             onClick={() => startQuiz(lesson)}
                             className="bg-gray-800 hover:bg-gray-700 px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1.5 md:gap-2 active:scale-95 transition-transform"
@@ -2544,6 +2604,12 @@ Problem: ${chatInput}`
                     Take Quiz
                   </button>
                 </div>
+
+                {lessonHistoryByCourse[`course_${activeCourse?.id}_lesson_${activeLesson.id}`]?.updatedAt && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Last session: {new Date(lessonHistoryByCourse[`course_${activeCourse?.id}_lesson_${activeLesson.id}`].updatedAt).toLocaleString()}
+                  </p>
+                )}
                 
                 {lessonContent.length > 0 && (
                   <div className="flex gap-1 mt-3">
@@ -2905,6 +2971,9 @@ Problem: ${chatInput}`
                         </button>
                       ))}
                     </div>
+                    <p className="text-xs text-gray-500 mt-4">
+                      Try: "Make a venn diagram for mammals vs birds" or "Make a right triangle diagram"
+                    </p>
                   </div>
                 )}
 
@@ -2940,6 +3009,10 @@ Problem: ${chatInput}`
                           <div className="bg-surface-800/80 rounded-2xl p-4 border border-white/5">
                             <MarkdownRenderer content={msg.content} />
                           </div>
+
+                          {msg.diagram && (
+                            <InteractiveDiagram diagram={msg.diagram} />
+                          )}
 
                           {msg.sourceRefs?.length > 0 && (
                             <div className="bg-primary-500/10 border border-primary-500/25 rounded-xl p-3">
