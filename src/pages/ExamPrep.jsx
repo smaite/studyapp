@@ -118,6 +118,12 @@ export default function ExamPrep() {
   const [shareLink, setShareLink] = useState('')
   const [copySuccess, setCopySuccess] = useState(false)
 
+  // Public subjects
+  const [publicSubjects, setPublicSubjects] = useState([])
+  const [loadingPublic, setLoadingPublic] = useState(false)
+  const [publicSearchQuery, setPublicSearchQuery] = useState('')
+  const [publicLanguageFilter, setPublicLanguageFilter] = useState('all')
+
   // Filter
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
@@ -977,6 +983,134 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
     }
   }
 
+  // === PUBLIC SUBJECTS FUNCTIONS ===
+  const loadPublicSubjects = async () => {
+    setLoadingPublic(true)
+    try {
+      const { data, error } = await supabase
+        .from('public_subjects')
+        .select('*')
+        .order('downloads', { ascending: false })
+        .limit(50)
+      
+      if (error) throw error
+      setPublicSubjects(data || [])
+    } catch (error) {
+      console.error('Error loading public subjects:', error)
+      // If table doesn't exist yet, show empty
+      setPublicSubjects([])
+    } finally {
+      setLoadingPublic(false)
+    }
+  }
+
+  const shareToPublic = async () => {
+    if (!activeCourse || !user) return
+    
+    try {
+      setIsProcessing(true)
+      setProcessingStatus('Publishing to public library...')
+      
+      // Check if already published
+      const { data: existing } = await supabase
+        .from('public_subjects')
+        .select('id')
+        .eq('course_id', activeCourse.id)
+        .eq('shared_by', user.id)
+        .single()
+      
+      if (existing) {
+        // Update existing
+        const { error } = await supabase
+          .from('public_subjects')
+          .update({
+            subject_name: activeCourse.name,
+            subject_language: activeCourse.language || 'English',
+            lesson_count: activeCourse.lessons.length,
+            course_data: activeCourse,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existing.id)
+        
+        if (error) throw error
+        alert('✅ Subject updated in public library!')
+      } else {
+        // Create new
+        const { error } = await supabase
+          .from('public_subjects')
+          .insert({
+            course_id: activeCourse.id,
+            shared_by: user.id,
+            shared_by_name: user.email?.split('@')[0] || 'Anonymous',
+            subject_name: activeCourse.name,
+            subject_language: activeCourse.language || 'English',
+            lesson_count: activeCourse.lessons.length,
+            course_data: activeCourse,
+            downloads: 0
+          })
+        
+        if (error) throw error
+        alert('✅ Subject published to public library!')
+      }
+      
+      setShowShareModal(false)
+    } catch (error) {
+      console.error('Error publishing:', error)
+      alert('Error publishing: ' + error.message)
+    } finally {
+      setIsProcessing(false)
+      setProcessingStatus('')
+    }
+  }
+
+  const importPublicSubject = async (subject) => {
+    try {
+      // Increment download count
+      await supabase.rpc('increment_downloads', { subject_id: subject.id })
+      
+      const courseData = subject.course_data
+      const newCourse = {
+        ...courseData,
+        id: Date.now(),
+        originalId: subject.id,
+        sharedFrom: subject.shared_by_name,
+        createdAt: new Date().toISOString(),
+        totalProgress: 0,
+        needsAssessment: true,
+        lessons: courseData.lessons.map(l => ({
+          ...l,
+          progress: 0,
+          quizScore: null,
+          completed: false,
+          knowledgeLevel: null
+        }))
+      }
+      
+      setCourses(prev => [...prev, newCourse])
+      setActiveCourse(newCourse)
+      setView('assessment')
+      
+      alert(`✅ "${subject.subject_name}" imported! Starting assessment...`)
+    } catch (error) {
+      console.error('Import error:', error)
+      alert('Error importing subject: ' + error.message)
+    }
+  }
+
+  // Load public subjects when viewing public page
+  useEffect(() => {
+    if (view === 'public') {
+      loadPublicSubjects()
+    }
+  }, [view])
+
+  // Filter public subjects
+  const filteredPublicSubjects = publicSubjects.filter(s => {
+    const matchesSearch = s.subject_name.toLowerCase().includes(publicSearchQuery.toLowerCase())
+    const matchesLanguage = publicLanguageFilter === 'all' || s.subject_language === publicLanguageFilter
+    return matchesSearch && matchesLanguage
+  })
+
   // === AI TUTOR CHAT FUNCTIONS ===
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -1162,6 +1296,16 @@ Problem: ${chatInput}`
           >
             <Home className="h-5 w-5 shrink-0" />
             {sidebarOpen && <span>Dashboard</span>}
+          </button>
+          
+          <button
+            onClick={() => setView('public')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer ${
+              view === 'public' ? 'bg-primary-500/15 text-primary-400 border border-primary-500/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            <Users className="h-5 w-5 shrink-0" />
+            {sidebarOpen && <span>Public Library</span>}
           </button>
           
           <button
@@ -1436,6 +1580,113 @@ Problem: ${chatInput}`
                   </div>
                 )}
               </section>
+            </div>
+          )}
+          
+          {/* PUBLIC LIBRARY */}
+          {view === 'public' && (
+            <div className="p-4 md:p-6 max-w-6xl mx-auto">
+              {/* Header */}
+              <div className="mb-6 md:mb-8">
+                <h1 className="text-2xl md:text-3xl font-bold mb-2">Public Library</h1>
+                <p className="text-gray-400">Discover subjects shared by the community. Import and start learning instantly!</p>
+              </div>
+              
+              {/* Search & Filter */}
+              <div className="flex flex-col md:flex-row gap-3 md:gap-4 mb-6">
+                <div className="relative flex-1">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
+                  <input
+                    type="text"
+                    value={publicSearchQuery}
+                    onChange={(e) => setPublicSearchQuery(e.target.value)}
+                    placeholder="Search public subjects..."
+                    className="w-full bg-surface-800/80 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                  />
+                </div>
+                
+                <select
+                  value={publicLanguageFilter}
+                  onChange={(e) => setPublicLanguageFilter(e.target.value)}
+                  className="bg-surface-800/80 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500 cursor-pointer"
+                >
+                  <option value="all">All Languages</option>
+                  {languages.map(lang => (
+                    <option key={lang.code} value={lang.name}>{lang.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Loading State */}
+              {loadingPublic ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="h-8 w-8 text-primary-500 animate-spin" />
+                </div>
+              ) : filteredPublicSubjects.length === 0 ? (
+                <div className="text-center py-20">
+                  <div className="w-16 h-16 bg-surface-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <Users className="h-8 w-8 text-gray-600" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-400 mb-2">No Public Subjects Yet</h3>
+                  <p className="text-sm text-gray-500 mb-6">Be the first to share your subject with the community!</p>
+                  <button
+                    onClick={() => setView('home')}
+                    className="px-6 py-2.5 bg-primary-600 hover:bg-primary-500 rounded-xl font-medium transition-colors cursor-pointer"
+                  >
+                    Create a Subject
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredPublicSubjects.map(subject => {
+                    const style = getSubjectStyle(subject.subject_name)
+                    return (
+                      <div
+                        key={subject.id}
+                        className="bg-surface-800/60 border border-white/5 rounded-2xl p-5 hover:bg-surface-700/60 hover:border-white/10 transition-all group"
+                      >
+                        <div className="flex items-start gap-3 mb-4">
+                          <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${style.color} flex items-center justify-center text-xl shrink-0`}>
+                            {style.icon}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-semibold text-lg truncate">{subject.subject_name}</h3>
+                            <p className="text-sm text-gray-400">{subject.lesson_count} lessons</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          <span className="px-2 py-1 bg-primary-500/10 text-primary-400 text-xs rounded-lg">
+                            {subject.subject_language || 'English'}
+                          </span>
+                          <span className="px-2 py-1 bg-white/5 text-gray-400 text-xs rounded-lg flex items-center gap-1">
+                            <BarChart3 className="h-3 w-3" />
+                            {subject.downloads || 0} imports
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
+                          <span className="flex items-center gap-1.5">
+                            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center text-[10px] font-bold text-white">
+                              {subject.shared_by_name?.[0]?.toUpperCase() || 'U'}
+                            </div>
+                            {subject.shared_by_name}
+                          </span>
+                          <span>{new Date(subject.created_at).toLocaleDateString()}</span>
+                        </div>
+                        
+                        <button
+                          onClick={() => importPublicSubject(subject)}
+                          className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <BookOpen className="h-4 w-4" />
+                          Import & Start
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
           
@@ -2324,49 +2575,79 @@ Problem: ${chatInput}`
                   <Share2 className="h-5 w-5 text-primary-400" />
                   Share Course
                 </h2>
-                <button onClick={() => setShowShareModal(false)} className="p-2 hover:bg-white/5 rounded-xl transition-colors">
+                <button onClick={() => setShowShareModal(false)} className="p-2 hover:bg-white/5 rounded-xl transition-colors cursor-pointer">
                   <X className="h-5 w-5 text-gray-400" />
                 </button>
               </div>
             </div>
             
-            <div className="p-6">
-              <p className="text-gray-400 mb-4">
-                Share this link with friends. They'll need to create an account and take their own assessment before starting.
-              </p>
+            <div className="p-6 space-y-5">
+              {/* Private Link Share */}
+              <div>
+                <h3 className="font-medium mb-2 flex items-center gap-2">
+                  <Link2 className="h-4 w-4 text-gray-400" />
+                  Private Link (7 days)
+                </h3>
+                <p className="text-gray-500 text-sm mb-3">
+                  Share with specific friends via a link.
+                </p>
+                
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={shareLink}
+                    readOnly
+                    className="flex-1 bg-surface-700 border border-white/10 rounded-xl px-4 py-3 text-gray-300 text-sm"
+                  />
+                  <button
+                    onClick={copyShareLink}
+                    className={`px-4 py-3 rounded-xl font-medium flex items-center gap-2 transition-colors cursor-pointer ${
+                      copySuccess ? 'bg-success-600 text-white' : 'bg-primary-600 hover:bg-primary-500 text-white'
+                    }`}
+                  >
+                    {copySuccess ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+                  </button>
+                </div>
+              </div>
               
-              <div className="flex gap-2 mb-4">
-                <input
-                  type="text"
-                  value={shareLink}
-                  readOnly
-                  className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-300 text-sm"
-                />
+              {/* Divider */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-white/10" />
+                <span className="text-xs text-gray-500">OR</span>
+                <div className="flex-1 h-px bg-white/10" />
+              </div>
+              
+              {/* Public Library Share */}
+              <div className="bg-primary-500/5 border border-primary-500/20 rounded-xl p-4">
+                <h3 className="font-medium mb-2 flex items-center gap-2">
+                  <Users className="h-4 w-4 text-primary-400" />
+                  Share to Public Library
+                </h3>
+                <p className="text-gray-400 text-sm mb-4">
+                  Publish this subject for everyone to discover and learn from. Help the community!
+                </p>
+                
                 <button
-                  onClick={copyShareLink}
-                  className={`px-4 py-3 rounded-xl font-medium flex items-center gap-2 transition-colors ${
-                    copySuccess ? 'bg-green-600 text-white' : 'bg-primary-600 hover:bg-primary-500 text-white'
-                  }`}
+                  onClick={shareToPublic}
+                  disabled={isProcessing}
+                  className="w-full py-3 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  {copySuccess ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Publishing...
+                    </>
+                  ) : (
+                    <>
+                      <Users className="h-4 w-4" />
+                      Publish to Public Library
+                    </>
+                  )}
                 </button>
               </div>
               
-              <div className="bg-gray-800/50 rounded-xl p-4">
-                <h4 className="font-medium mb-2 flex items-center gap-2">
-                  <Users className="h-4 w-4 text-primary-400" />
-                  What happens when they open this link:
-                </h4>
-                <ul className="text-sm text-gray-400 space-y-1">
-                  <li>• They'll be asked to create an account</li>
-                  <li>• They take their own assessment quiz</li>
-                  <li>• The course is saved to their account</li>
-                  <li>• Their progress is tracked separately</li>
-                </ul>
-              </div>
-              
-              <p className="text-xs text-gray-600 mt-4 text-center">
-                Link expires in 7 days
+              <p className="text-xs text-gray-600 text-center">
+                Private links expire in 7 days. Public shares remain until you remove them.
               </p>
             </div>
           </div>
@@ -2440,11 +2721,11 @@ Problem: ${chatInput}`
       )}
       
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface-800/95 backdrop-blur-xl border-t border-white/5 px-2 py-2 safe-area-bottom z-40">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface-800/95 backdrop-blur-xl border-t border-white/5 px-1 py-2 safe-area-bottom z-40">
         <div className="flex items-center justify-around max-w-md mx-auto">
           <button
             onClick={() => { setView('home'); setActiveCourse(null) }}
-            className={`flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center gap-0.5 py-2 px-2 rounded-xl transition-all cursor-pointer ${
               view === 'home' ? 'text-primary-400 bg-primary-500/10' : 'text-gray-500 active:bg-white/5'
             }`}
           >
@@ -2453,18 +2734,18 @@ Problem: ${chatInput}`
           </button>
           
           <button
-            onClick={() => setView('chat')}
-            className={`flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl transition-all cursor-pointer ${
-              view === 'chat' ? 'text-primary-400 bg-primary-500/10' : 'text-gray-500 active:bg-white/5'
+            onClick={() => setView('public')}
+            className={`flex flex-col items-center gap-0.5 py-2 px-2 rounded-xl transition-all cursor-pointer ${
+              view === 'public' ? 'text-primary-400 bg-primary-500/10' : 'text-gray-500 active:bg-white/5'
             }`}
           >
-            <Bot className="h-5 w-5" />
-            <span className="text-[10px] font-medium">AI Tutor</span>
+            <Users className="h-5 w-5" />
+            <span className="text-[10px] font-medium">Explore</span>
           </button>
           
           <button
             onClick={() => setShowNewCourse(true)}
-            className="flex flex-col items-center gap-0.5 py-1.5 px-3 -mt-5 cursor-pointer"
+            className="flex flex-col items-center gap-0.5 py-1.5 px-2 -mt-5 cursor-pointer"
           >
             <div className="bg-primary-600 hover:bg-primary-500 p-3 rounded-2xl shadow-lg shadow-primary-500/30 active:scale-95 transition-all">
               <Plus className="h-5 w-5" />
@@ -2472,23 +2753,23 @@ Problem: ${chatInput}`
           </button>
           
           <button
+            onClick={() => setView('chat')}
+            className={`flex flex-col items-center gap-0.5 py-2 px-2 rounded-xl transition-all cursor-pointer ${
+              view === 'chat' ? 'text-primary-400 bg-primary-500/10' : 'text-gray-500 active:bg-white/5'
+            }`}
+          >
+            <Bot className="h-5 w-5" />
+            <span className="text-[10px] font-medium">Tutor</span>
+          </button>
+          
+          <button
             onClick={() => activeCourse ? setView('course') : null}
-            className={`flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center gap-0.5 py-2 px-2 rounded-xl transition-all cursor-pointer ${
               view === 'course' ? 'text-primary-400 bg-primary-500/10' : 'text-gray-500 active:bg-white/5'
             } ${!activeCourse ? 'opacity-40' : ''}`}
           >
             <BookOpen className="h-5 w-5" />
             <span className="text-[10px] font-medium">Course</span>
-          </button>
-          
-          <button
-            onClick={() => {}}
-            className="flex flex-col items-center gap-0.5 py-2 px-4 rounded-xl text-gray-500 active:bg-white/5 transition-colors cursor-pointer"
-          >
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center text-[10px] font-bold text-white shadow-sm">
-              {user?.email?.[0].toUpperCase() || 'U'}
-            </div>
-            <span className="text-[10px] font-medium">Profile</span>
           </button>
         </div>
       </nav>
