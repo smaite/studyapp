@@ -24,6 +24,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
 const STORAGE_KEY = 'studyai_courses'
 const PROGRESS_KEY = 'studyai_progress'
 const CHAT_HISTORY_KEY = 'studyai_chat_history'
+const LESSON_HISTORY_KEY = 'studyai_lesson_history'
 
 // Gamification constants
 const XP_REWARDS = {
@@ -231,6 +232,51 @@ const safeParseJSON = (text, fallback = []) => {
     console.error('JSON Parse Error:', error.message)
     return fallback
   }
+}
+
+function InteractiveDiagram({ diagram }) {
+  const [a, setA] = useState(Number(diagram?.a) || 6)
+  const [b, setB] = useState(Number(diagram?.b) || 8)
+
+  if (!diagram) return null
+
+  if (diagram.type === 'venn') {
+    return (
+      <div className="bg-surface-800/80 rounded-2xl p-4 border border-primary-500/20">
+        <p className="text-sm text-gray-300 mb-3 font-medium">{diagram.title || 'Interactive Venn Diagram'}</p>
+        <svg viewBox="0 0 320 180" className="w-full h-auto">
+          <circle cx="120" cy="90" r="60" fill="rgba(168,85,247,0.25)" stroke="#a855f7" strokeWidth="2" />
+          <circle cx="200" cy="90" r="60" fill="rgba(34,211,238,0.25)" stroke="#22d3ee" strokeWidth="2" />
+          <text x="80" y="90" fill="#ddd" fontSize="12">{diagram.leftLabel || 'Set A'}</text>
+          <text x="220" y="90" fill="#ddd" fontSize="12">{diagram.rightLabel || 'Set B'}</text>
+          <text x="150" y="95" fill="#fff" fontSize="12">{diagram.centerLabel || 'Common'}</text>
+        </svg>
+      </div>
+    )
+  }
+
+  if (diagram.type === 'triangle') {
+    const c = Math.sqrt(a * a + b * b).toFixed(2)
+    return (
+      <div className="bg-surface-800/80 rounded-2xl p-4 border border-primary-500/20 space-y-3">
+        <p className="text-sm text-gray-300 font-medium">{diagram.title || 'Interactive Right Triangle'}</p>
+        <svg viewBox="0 0 300 180" className="w-full h-auto bg-surface-900/40 rounded-lg">
+          <line x1="50" y1="140" x2="250" y2="140" stroke="#60a5fa" strokeWidth="2" />
+          <line x1="50" y1="140" x2="50" y2="40" stroke="#60a5fa" strokeWidth="2" />
+          <line x1="50" y1="40" x2="250" y2="140" stroke="#a855f7" strokeWidth="2" />
+          <text x="145" y="155" fill="#93c5fd" fontSize="12">a = {a}</text>
+          <text x="18" y="95" fill="#93c5fd" fontSize="12">b = {b}</text>
+          <text x="135" y="82" fill="#c084fc" fontSize="12">c ≈ {c}</text>
+        </svg>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+          <label className="text-gray-300">a: <input type="range" min="1" max="20" value={a} onChange={(e) => setA(Number(e.target.value))} className="w-full" /></label>
+          <label className="text-gray-300">b: <input type="range" min="1" max="20" value={b} onChange={(e) => setB(Number(e.target.value))} className="w-full" /></label>
+        </div>
+      </div>
+    )
+  }
+
+  return null
 }
 
 export default function ExamPrep() {
@@ -1474,14 +1520,14 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
     })
   }, [chatMessages, activeCourse])
 
-  const getCourseContextForChat = (query) => {
-    if (!activeCourse) return ''
+  const getRelevantPdfPages = (query) => {
+    if (!activeCourse) return []
     const pageMatch = query.match(/page\s+(\d+)/i)
     if (pageMatch && activeCourse.pdfPageIndex?.length) {
       const pageNum = Number(pageMatch[1])
       const exactPage = activeCourse.pdfPageIndex.filter(p => p.page === pageNum).slice(0, 3)
       if (exactPage.length > 0) {
-        return `\n\nCOURSE PAGE CONTEXT (use this to answer accurately):\n${exactPage.map(p => `Source: ${p.source || 'PDF'} | Page ${p.page}\n${p.text?.substring(0, 4000) || ''}`).join('\n\n---\n\n')}`
+        return exactPage
       }
     }
 
@@ -1499,10 +1545,20 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
         .slice(0, 5)
 
       if (scoredPages.length > 0) {
-        return `\n\nRELEVANT COURSE CONTEXT:\n${scoredPages.map(p => `Source: ${p.source || 'PDF'} | Page ${p.page}\n${p.text?.substring(0, 2500) || ''}`).join('\n\n---\n\n')}`
+        return scoredPages
       }
     }
 
+    return []
+  }
+
+  const getCourseContextForChat = (query) => {
+    const relevantPages = getRelevantPdfPages(query)
+    if (relevantPages.length > 0) {
+      const isExactPageQuery = /page\s+\d+/i.test(query)
+      const header = isExactPageQuery ? 'COURSE PAGE CONTEXT (use this to answer accurately):' : 'RELEVANT COURSE CONTEXT:'
+      return `\n\n${header}\n${relevantPages.map(p => `Source: ${p.source || 'PDF'} | Page ${p.page}\n${p.text?.substring(0, isExactPageQuery ? 4000 : 2500) || ''}`).join('\n\n---\n\n')}`
+    }
     return activeCourse.content
       ? `\n\nCOURSE CONTEXT:\n${activeCourse.content.substring(0, 12000)}`
       : ''
@@ -1539,6 +1595,7 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
     try {
       let response
       let parsedSolution = null
+      let sourceRefs = []
       const isMathProblem = mathMode || /[0-9+\-*/=^√∫∑]/.test(chatInput) || chatImage
 
       if (isMathProblem && (chatImage || /solve|calculate|find|compute|evaluate|simplify/i.test(chatInput))) {
@@ -1570,6 +1627,10 @@ Problem: ${chatInput}`
         const imgPrompt = activeCourse ? `${chatInput}\n\nRespond in ${activeCourse.language || 'English'} language.` : chatInput
         response = await analyzeImage(chatImage, imgPrompt, 'General')
       } else {
+        sourceRefs = getRelevantPdfPages(chatInput).slice(0, 3).map(p => ({
+          source: p.source || 'PDF',
+          page: p.page
+        }))
         const courseContext = getCourseContextForChat(chatInput)
         const apiMsgs = chatMessages.slice(-10).map(m => ({ role: m.role, content: m.content }))
         const userMsg = activeCourse 
@@ -1585,7 +1646,8 @@ Problem: ${chatInput}`
       setChatMessages(prev => [...prev, {
         role: 'assistant',
         content: parsedSolution?.fullExplanation || response.content,
-        solution: parsedSolution
+        solution: parsedSolution,
+        sourceRefs
       }])
     } catch (error) {
       setChatMessages(prev => [...prev, {
@@ -2878,6 +2940,19 @@ Problem: ${chatInput}`
                           <div className="bg-surface-800/80 rounded-2xl p-4 border border-white/5">
                             <MarkdownRenderer content={msg.content} />
                           </div>
+
+                          {msg.sourceRefs?.length > 0 && (
+                            <div className="bg-primary-500/10 border border-primary-500/25 rounded-xl p-3">
+                              <p className="text-xs uppercase tracking-wider text-primary-300 mb-2">Sources</p>
+                              <div className="flex flex-wrap gap-2">
+                                {msg.sourceRefs.map((ref, i) => (
+                                  <span key={`${ref.source}-${ref.page}-${i}`} className="px-2.5 py-1 rounded-lg text-xs bg-primary-500/20 text-primary-200 border border-primary-500/30">
+                                    {ref.source} • Page {ref.page}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                           
                           <div className="flex items-center gap-2 text-gray-500">
                             <button className="p-1.5 hover:bg-white/5 rounded-lg transition-colors cursor-pointer"><ThumbsUp className="h-4 w-4" /></button>
