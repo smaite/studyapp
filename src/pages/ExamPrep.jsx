@@ -37,6 +37,42 @@ const subjectStyles = {
 // Check if mobile
 const isMobile = () => window.innerWidth < 768
 
+// Robust JSON parser - handles malformed AI responses
+const safeParseJSON = (text, fallback = []) => {
+  try {
+    // Remove code block markers
+    let json = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+    
+    // Find JSON array or object boundaries
+    const arrayStart = json.indexOf('[')
+    const arrayEnd = json.lastIndexOf(']')
+    const objStart = json.indexOf('{')
+    const objEnd = json.lastIndexOf('}')
+    
+    // Determine if it's an array or object
+    if (arrayStart !== -1 && arrayEnd !== -1 && (arrayStart < objStart || objStart === -1)) {
+      json = json.substring(arrayStart, arrayEnd + 1)
+    } else if (objStart !== -1 && objEnd !== -1) {
+      json = json.substring(objStart, objEnd + 1)
+    }
+    
+    // Fix common JSON issues
+    json = json
+      .replace(/,\s*([}\]])/g, '$1') // Remove trailing commas
+      .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3') // Quote unquoted keys
+      .replace(/:\s*'([^']*)'/g, ': "$1"') // Convert single quotes to double
+      .replace(/\n/g, ' ') // Remove newlines inside strings
+      .replace(/\t/g, ' ') // Remove tabs
+      .replace(/\\n/g, '\\\\n') // Escape newlines in strings
+    
+    return JSON.parse(json)
+  } catch (error) {
+    console.error('JSON Parse Error:', error.message)
+    console.log('Attempted to parse:', text?.substring(0, 500))
+    return fallback
+  }
+}
+
 export default function ExamPrep() {
   const { user, signOut } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(() => !isMobile())
