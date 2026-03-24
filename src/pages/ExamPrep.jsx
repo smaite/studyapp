@@ -351,6 +351,20 @@ const sanitizeChatHistory = (items) => {
     }))
 }
 
+const sanitizeChatHistoryMap = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { cleaned: {}, wasCorrupted: true }
+  }
+  let wasCorrupted = false
+  const cleaned = {}
+  Object.entries(value).forEach(([key, items]) => {
+    const safe = sanitizeChatHistory(items)
+    if (!Array.isArray(items) || safe.length !== items.length) wasCorrupted = true
+    cleaned[key] = safe
+  })
+  return { cleaned, wasCorrupted }
+}
+
 const parseMathSolution = (content) => {
   const direct = safeParseJSON(content, null)
   if (direct && direct.steps) return direct
@@ -488,13 +502,14 @@ export default function ExamPrep() {
       const saved = localStorage.getItem(CHAT_HISTORY_KEY)
       if (!saved) return {}
       const parsed = JSON.parse(saved)
-      if (!parsed || typeof parsed !== 'object') return {}
-      const cleaned = {}
-      Object.entries(parsed).forEach(([key, value]) => {
-        cleaned[key] = sanitizeChatHistory(value)
-      })
+      const { cleaned, wasCorrupted } = sanitizeChatHistoryMap(parsed)
+      if (wasCorrupted) {
+        console.warn('[ExamPrep] Corrupted chat history detected. Auto-cleaning local storage.')
+        localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(cleaned))
+      }
       return cleaned
     } catch {
+      localStorage.removeItem(CHAT_HISTORY_KEY)
       return {}
     }
   })
