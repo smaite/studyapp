@@ -340,6 +340,17 @@ const formatOptionText = (option, index) => {
   return `${String.fromCharCode(65 + index)}) ${cleaned}`
 }
 
+const sanitizeChatHistory = (items) => {
+  if (!Array.isArray(items)) return []
+  return items
+    .filter((m) => m && typeof m === 'object')
+    .map((m) => ({
+      ...m,
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content: typeof m.content === 'string' ? m.content : ''
+    }))
+}
+
 const parseMathSolution = (content) => {
   const direct = safeParseJSON(content, null)
   if (direct && direct.steps) return direct
@@ -475,7 +486,14 @@ export default function ExamPrep() {
   const [chatHistoryByCourse, setChatHistoryByCourse] = useState(() => {
     try {
       const saved = localStorage.getItem(CHAT_HISTORY_KEY)
-      return saved ? JSON.parse(saved) : {}
+      if (!saved) return {}
+      const parsed = JSON.parse(saved)
+      if (!parsed || typeof parsed !== 'object') return {}
+      const cleaned = {}
+      Object.entries(parsed).forEach(([key, value]) => {
+        cleaned[key] = sanitizeChatHistory(value)
+      })
+      return cleaned
     } catch {
       return {}
     }
@@ -1669,7 +1687,7 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
   // Load chat history when course id changes (prevents rapid view glitches)
   useEffect(() => {
     const historyKey = activeCourse ? `course_${activeCourse.id}` : 'general'
-    setChatMessages(chatHistoryByCourse[historyKey] || [])
+    setChatMessages(sanitizeChatHistory(chatHistoryByCourse[historyKey]))
   }, [activeCourse?.id])
 
   // Persist latest chat messages into history map
@@ -1678,9 +1696,10 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
     setChatHistoryByCourse(prev => {
       const previous = prev[historyKey] || []
       if (previous === chatMessages) return prev
+      const cleanedMessages = sanitizeChatHistory(chatMessages).slice(-100)
       return {
         ...prev,
-        [historyKey]: chatMessages.slice(-100)
+        [historyKey]: cleanedMessages
       }
     })
   }, [chatMessages, activeCourse?.id])
@@ -1867,7 +1886,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
           page: p.page
         }))
         const courseContext = getCourseContextForChat(chatInput)
-        const apiMsgs = chatMessages.slice(-10).map(m => ({ role: m.role, content: m.content }))
+        const apiMsgs = sanitizeChatHistory(chatMessages).slice(-10).map(m => ({ role: m.role, content: m.content }))
         const userMsg = activeCourse 
           ? {
               role: 'user',
@@ -1903,7 +1922,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
       })
       setChatMessages(prev => [...prev, {
         role: 'assistant',
-        content: `Error: ${error.message}. Make sure AI proxy is running.`,
+          content: `Error: ${error?.message || 'Unknown error'}. Make sure AI proxy is running.`,
         isError: true
       }])
     } finally {
