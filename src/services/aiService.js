@@ -4,6 +4,29 @@ const API_BASE_URL = import.meta.env.VITE_AI_API_URL || 'http://localhost:8080'
 const API_KEY = import.meta.env.VITE_AI_API_KEY || 'dummy'
 const MODEL = import.meta.env.VITE_AI_MODEL || 'gemini-3-flash'
 
+const extractTextFromApiData = (data) => {
+  if (!data) return null
+
+  // Anthropic format
+  if (Array.isArray(data.content)) {
+    const textBlock = data.content.find(block => block?.type === 'text' && typeof block?.text === 'string')
+    if (textBlock?.text) return textBlock.text
+    if (typeof data.content[0]?.text === 'string') return data.content[0].text
+  }
+
+  // OpenAI-compatible formats
+  if (typeof data.content === 'string') return data.content
+  if (typeof data.output_text === 'string') return data.output_text
+  if (typeof data.message?.content === 'string') return data.message.content
+  if (Array.isArray(data.choices)) {
+    const c0 = data.choices[0]
+    if (typeof c0?.message?.content === 'string') return c0.message.content
+    if (typeof c0?.text === 'string') return c0.text
+  }
+
+  return null
+}
+
 export const analyzeDocument = async (content, fileType, subject, question) => {
   const systemPrompt = `You are an expert AI tutor helping a student study for their ${subject || 'exam'}. 
 The student has uploaded study materials. Analyze the content and help them understand it.
@@ -56,18 +79,17 @@ Guidelines:
       throw new Error(`API Error: ${response.status}`)
     }
 
-    const data = await response.json()
-    // Handle Anthropic response format
-    if (data.content && Array.isArray(data.content)) {
-      const textBlock = data.content.find(block => block.type === 'text')
-      if (textBlock && textBlock.text) {
-        return { content: textBlock.text }
-      }
-      if (data.content[0] && data.content[0].text) {
-        return { content: data.content[0].text }
-      }
+    const raw = await response.text()
+    let data
+    try {
+      data = JSON.parse(raw)
+    } catch {
+      throw new Error(`Proxy returned invalid JSON: ${raw.substring(0, 200)}`)
     }
-    throw new Error('Unexpected response format')
+
+    const text = extractTextFromApiData(data)
+    if (typeof text === 'string' && text.trim()) return { content: text }
+    throw new Error(`Unexpected response format: ${JSON.stringify(data).substring(0, 200)}`)
   } catch (error) {
     console.error('Document Analysis Error:', error)
     throw error
@@ -127,23 +149,20 @@ Use markdown formatting for clarity.`
       throw new Error(`API Error: ${response.status} - ${errorData}`)
     }
 
-    const data = await response.json()
-    
-    // Handle Anthropic response format
-    if (data.content && Array.isArray(data.content)) {
-      const textBlock = data.content.find(block => block.type === 'text')
-      if (textBlock && textBlock.text) {
-        const text = textBlock.text
-        if (onChunk) onChunk(text)
-        return { content: text }
-      }
-      if (data.content[0] && data.content[0].text) {
-        const text = data.content[0].text
-        if (onChunk) onChunk(text)
-        return { content: text }
-      }
+    const raw = await response.text()
+    let data
+    try {
+      data = JSON.parse(raw)
+    } catch {
+      throw new Error(`Proxy returned invalid JSON: ${raw.substring(0, 200)}`)
     }
-    throw new Error('Unexpected response format')
+
+    const text = extractTextFromApiData(data)
+    if (typeof text === 'string' && text.trim()) {
+      if (onChunk) onChunk(text)
+      return { content: text }
+    }
+    throw new Error(`Unexpected response format: ${JSON.stringify(data).substring(0, 200)}`)
   } catch (error) {
     console.error('AI Service Error:', error)
     throw error
@@ -192,18 +211,17 @@ export const analyzeImage = async (imageBase64, question, subject = null) => {
       throw new Error(`API Error: ${response.status}`)
     }
 
-    const data = await response.json()
-    // Handle Anthropic response format
-    if (data.content && Array.isArray(data.content)) {
-      const textBlock = data.content.find(block => block.type === 'text')
-      if (textBlock && textBlock.text) {
-        return { content: textBlock.text }
-      }
-      if (data.content[0] && data.content[0].text) {
-        return { content: data.content[0].text }
-      }
+    const raw = await response.text()
+    let data
+    try {
+      data = JSON.parse(raw)
+    } catch {
+      throw new Error(`Proxy returned invalid JSON: ${raw.substring(0, 200)}`)
     }
-    throw new Error('Unexpected response format')
+
+    const text = extractTextFromApiData(data)
+    if (typeof text === 'string' && text.trim()) return { content: text }
+    throw new Error(`Unexpected response format: ${JSON.stringify(data).substring(0, 200)}`)
   } catch (error) {
     console.error('Image Analysis Error:', error)
     throw error
