@@ -308,9 +308,21 @@ const inferDiagramRequest = (text = '') => {
 
 const cleanEscapedText = (value = '') => {
   return String(value)
+    .replace(/\\\$/g, '$')
+    .replace(/\$(.*?)\$/g, '$1')
+    .replace(/\$/g, '')
     .replace(/\\([{}])/g, '$1')
     .replace(/\\,/g, ',')
     .replace(/\\in/g, '∈')
+    .replace(/\\cup/g, '∪')
+    .replace(/\\cap/g, '∩')
+    .replace(/\\subseteq/g, '⊆')
+    .replace(/\\subset/g, '⊂')
+    .replace(/\\supseteq/g, '⊇')
+    .replace(/\\supset/g, '⊃')
+    .replace(/\\setminus/g, '∖')
+    .replace(/\\ldots/g, '...')
+    .replace(/\\dots/g, '...')
     .replace(/\\le/g, '≤')
     .replace(/\\ge/g, '≥')
     .replace(/\\neq/g, '≠')
@@ -2844,7 +2856,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
                   <div className="bg-primary-500/10 border border-primary-500/30 rounded-xl p-3 mb-3">
                     <div className="text-sm text-primary-300 flex items-start gap-2">
                       <Sparkles className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                      <MarkdownRenderer content={lessonContent[currentStep].checkQuestion} />
+                      <MarkdownRenderer content={cleanEscapedText(lessonContent[currentStep].checkQuestion)} />
                     </div>
                   </div>
                 )}
@@ -2852,7 +2864,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
                 {lessonContent[currentStep]?.checkQuestion && (
                   <div className="flex flex-wrap gap-2 mb-3">
                     {[
-                      lessonContent[currentStep].checkQuestion,
+                      cleanEscapedText(lessonContent[currentStep].checkQuestion),
                       'Give me a similar question',
                       'Explain this with an example'
                     ].map((q, i) => (
