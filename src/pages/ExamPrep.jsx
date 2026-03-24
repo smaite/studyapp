@@ -436,6 +436,8 @@ export default function ExamPrep() {
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef(null)
   const [lessonContent, setLessonContent] = useState([]) // Steps in lesson
+  const [stepCheckShown, setStepCheckShown] = useState({})
+  const isRestoringLessonRef = useRef(false)
   const [lessonHistoryByCourse, setLessonHistoryByCourse] = useState(() => {
     try {
       const saved = localStorage.getItem(LESSON_HISTORY_KEY)
@@ -1114,15 +1116,19 @@ Return ONLY valid JSON array (no other text):
     const savedLesson = lessonHistoryByCourse[lessonKey]
 
     if (savedLesson?.messages?.length) {
+      isRestoringLessonRef.current = true
       setCurrentStep(savedLesson.currentStep || 0)
       setLessonContent(savedLesson.lessonContent || [])
       setMessages(savedLesson.messages || [])
+      setStepCheckShown(savedLesson.stepCheckShown || {})
+      setTimeout(() => { isRestoringLessonRef.current = false }, 0)
       return
     }
 
     setCurrentStep(0)
     setLessonContent([])
     setMessages([])
+    setStepCheckShown({})
     setIsLoading(true)
     
     try {
@@ -1190,6 +1196,7 @@ Question was: "${currentStepData?.checkQuestion || 'Do you understand?'}"
 Evaluate if the student understood (even partially).
 If they need help, explain briefly.
 If they understood, praise them and say "READY_NEXT" at the end.
+Do NOT repeat the same question text verbatim again unless the student explicitly asks to repeat.
 Be encouraging and use emojis!`
 
       const response = await sendMessage([
@@ -1199,7 +1206,15 @@ Be encouraging and use emojis!`
       ], activeCourse.name)
       
       const aiResponse = response.content
-      setMessages(prev => [...prev, { role: 'assistant', content: aiResponse.replace('READY_NEXT', '') }])
+      const cleanedResponse = aiResponse.replace('READY_NEXT', '').trim()
+      setMessages(prev => {
+        const lastAssistant = [...prev].reverse().find(m => m.role === 'assistant')
+        const finalResponse = lastAssistant && cleanEscapedText(lastAssistant.content) === cleanEscapedText(cleanedResponse)
+          ? "Great progress. Let's continue to the next part."
+          : cleanedResponse
+        return [...prev, { role: 'assistant', content: finalResponse }]
+      })
+      setStepCheckShown(prev => ({ ...prev, [currentStep]: true }))
       
       // If student understood, move to next step after a delay
       if (aiResponse.includes('READY_NEXT') && currentStep < lessonContent.length - 1) {
@@ -1228,6 +1243,7 @@ Be encouraging and use emojis!`
 
   useEffect(() => {
     if (!activeCourse || !activeLesson || view !== 'lesson-step') return
+    if (isRestoringLessonRef.current) return
     const lessonKey = `course_${activeCourse.id}_lesson_${activeLesson.id}`
     setLessonHistoryByCourse(prev => ({
       ...prev,
@@ -1235,10 +1251,11 @@ Be encouraging and use emojis!`
         currentStep,
         lessonContent,
         messages: messages.slice(-200),
+        stepCheckShown,
         updatedAt: new Date().toISOString()
       }
     }))
-  }, [messages, lessonContent, currentStep, activeCourse, activeLesson, view])
+  }, [messages, lessonContent, currentStep, activeCourse, activeLesson, view, stepCheckShown])
 
   const startQuiz = async (lesson) => {
     setActiveLesson(lesson)
@@ -2723,12 +2740,30 @@ Problem: ${chatInput}`
               
               {/* Input */}
               <div className="p-4 border-t border-gray-800 bg-gray-900/50">
-                {lessonContent[currentStep]?.checkQuestion && !messages.some(m => m.role === 'user') && (
+                {lessonContent[currentStep]?.checkQuestion && !stepCheckShown[currentStep] && (
                   <div className="bg-primary-500/10 border border-primary-500/30 rounded-xl p-3 mb-3">
                     <div className="text-sm text-primary-300 flex items-start gap-2">
                       <Sparkles className="h-4 w-4 mt-0.5 flex-shrink-0" />
                       <MarkdownRenderer content={lessonContent[currentStep].checkQuestion} />
                     </div>
+                  </div>
+                )}
+
+                {lessonContent[currentStep]?.checkQuestion && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {[
+                      lessonContent[currentStep].checkQuestion,
+                      'Give me a similar question',
+                      'Explain this with an example'
+                    ].map((q, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setInput(q)}
+                        className="px-3 py-1.5 rounded-lg text-xs bg-surface-800 border border-primary-500/20 hover:border-primary-500/40 text-gray-300 cursor-pointer"
+                      >
+                        {q}
+                      </button>
+                    ))}
                   </div>
                 )}
                 
