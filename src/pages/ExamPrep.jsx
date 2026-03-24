@@ -282,23 +282,40 @@ function InteractiveDiagram({ diagram }) {
 const inferDiagramRequest = (text = '') => {
   const q = text.toLowerCase()
   if (q.includes('venn')) {
+    const vsMatch = text.match(/venn(?:\s+diagram)?(?:\s+(?:for|of|between))?\s+(.+?)\s+(?:vs|and|&)\s+(.+)/i)
+    const left = vsMatch?.[1]?.trim()?.replace(/[?.!,]$/, '') || 'Set A'
+    const right = vsMatch?.[2]?.trim()?.replace(/[?.!,]$/, '') || 'Set B'
     return {
       type: 'venn',
       title: 'Interactive Venn Diagram',
-      leftLabel: 'Set A',
-      rightLabel: 'Set B',
+      leftLabel: left,
+      rightLabel: right,
       centerLabel: 'Common'
     }
   }
   if (q.includes('triangle') || q.includes('pythag') || q.includes('right angle')) {
+    const aMatch = text.match(/\ba\s*=?\s*(\d+(?:\.\d+)?)/i)
+    const bMatch = text.match(/\bb\s*=?\s*(\d+(?:\.\d+)?)/i)
     return {
       type: 'triangle',
       title: 'Interactive Right Triangle',
-      a: 6,
-      b: 8
+      a: aMatch ? Number(aMatch[1]) : 6,
+      b: bMatch ? Number(bMatch[1]) : 8
     }
   }
   return null
+}
+
+const cleanEscapedText = (value = '') => {
+  return String(value)
+    .replace(/\\([{}])/g, '$1')
+    .replace(/\\,/g, ',')
+    .trim()
+}
+
+const formatOptionText = (option, index) => {
+  const cleaned = cleanEscapedText(option).replace(/^\s*[A-Da-d][\)\].:-]\s*/, '')
+  return `${String.fromCharCode(65 + index)}) ${cleaned}`
 }
 
 export default function ExamPrep() {
@@ -890,7 +907,8 @@ Return ONLY valid JSON array (no other text):
       
       setQuestions(parsed.slice(0, 10).map(q => ({
         ...q,
-        options: q.options || ['A', 'B', 'C', 'D'],
+        question: cleanEscapedText(q.question),
+        options: (q.options || ['A', 'B', 'C', 'D']).map((opt, i) => formatOptionText(opt, i)),
         correct: typeof q.correct === 'number' ? q.correct : 0
       })))
     } catch (error) {
@@ -1220,7 +1238,12 @@ Return ONLY valid JSON array:
       const parsed = safeParseJSON(response.content, [])
       if (parsed.length === 0) throw new Error('No questions generated')
       
-      setQuestions(parsed.slice(0, 5))
+      setQuestions(parsed.slice(0, 5).map(q => ({
+        ...q,
+        question: cleanEscapedText(q.question),
+        options: (q.options || ['A', 'B', 'C', 'D']).map((opt, i) => formatOptionText(opt, i)),
+        explanation: cleanEscapedText(q.explanation || '')
+      })))
     } catch (error) {
       console.error('Quiz error:', error)
       setQuestions([{ question: 'Error generating questions. Try again?', options: ['Retry', 'Go back', 'Skip', 'Help'], correct: 0, explanation: '' }])
@@ -2416,7 +2439,7 @@ Problem: ${chatInput}`
                               : selectedAnswer === i ? 'border-primary-500 bg-primary-500/10' : 'border-gray-800 hover:border-gray-700'
                           }`}
                         >
-                          <MarkdownRenderer content={opt} />
+                          <span className="text-gray-100">{cleanEscapedText(opt)}</span>
                         </button>
                       ))}
                     </div>
@@ -2426,7 +2449,7 @@ Problem: ${chatInput}`
                         <p className={`font-medium mb-2 text-sm md:text-base ${answers[currentQ]?.correct ? 'text-green-400' : 'text-amber-400'}`}>
                           {answers[currentQ]?.correct ? '✓ Correct!' : '✗ Not quite'}
                         </p>
-                        <MarkdownRenderer content={questions[currentQ]?.explanation} />
+                        <MarkdownRenderer content={cleanEscapedText(questions[currentQ]?.explanation)} />
                       </div>
                     )}
                     
@@ -2739,7 +2762,7 @@ Problem: ${chatInput}`
                               : selectedAnswer === i ? 'border-primary-500 bg-primary-500/10' : 'border-gray-800 hover:border-gray-700'
                           }`}
                         >
-                          <MarkdownRenderer content={opt} />
+                          <span className="text-gray-100">{cleanEscapedText(opt)}</span>
                         </button>
                       ))}
                     </div>
@@ -2749,7 +2772,7 @@ Problem: ${chatInput}`
                         <p className={`font-medium mb-2 ${answers[currentQ]?.correct ? 'text-green-400' : 'text-amber-400'}`}>
                           {answers[currentQ]?.correct ? '✓ Correct!' : '✗ Not quite'}
                         </p>
-                        <MarkdownRenderer content={questions[currentQ]?.explanation} />
+                        <MarkdownRenderer content={cleanEscapedText(questions[currentQ]?.explanation)} />
                       </div>
                     )}
                     
@@ -2972,7 +2995,7 @@ Problem: ${chatInput}`
                       ))}
                     </div>
                     <p className="text-xs text-gray-500 mt-4">
-                      Try: "Make a venn diagram for mammals vs birds" or "Make a right triangle diagram"
+                      Try: "Make a venn diagram for plants vs animals" or "Make triangle with a=15 b=20"
                     </p>
                   </div>
                 )}
