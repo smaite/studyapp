@@ -7,7 +7,8 @@ import {
   Layers, Clock, BarChart3, HelpCircle, Search, Share2,
   Home, Calendar, History, Settings, Copy, Users, Link2,
   ArrowRight, Zap, Star, Menu, ChevronDown, FolderPlus, FileUp,
-  Calculator, PenLine, Camera, ThumbsUp, ThumbsDown, RefreshCw
+  Calculator, PenLine, Camera, ThumbsUp, ThumbsDown, RefreshCw,
+  Flame, Award, Timer, Heart, Swords, TrendingUp
 } from 'lucide-react'
 import { sendMessage, analyzeImage } from '../services/aiService'
 import MarkdownRenderer from '../components/MarkdownRenderer'
@@ -21,6 +22,34 @@ import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
 
 const STORAGE_KEY = 'studyai_courses'
+const PROGRESS_KEY = 'studyai_progress'
+
+// Gamification constants
+const XP_REWARDS = {
+  correctAnswer: 10,
+  perfectQuiz: 50,
+  lessonComplete: 25,
+  streakBonus: 15, // per day of streak
+  challengeWin: 100,
+  firstTry: 5, // bonus for getting it right first time
+}
+
+const RANKS = [
+  { name: 'Novice', minXP: 0, icon: '🌱', color: 'from-gray-500 to-gray-400' },
+  { name: 'Learner', minXP: 100, icon: '📚', color: 'from-green-500 to-green-400' },
+  { name: 'Student', minXP: 300, icon: '🎓', color: 'from-blue-500 to-blue-400' },
+  { name: 'Scholar', minXP: 600, icon: '⭐', color: 'from-purple-500 to-purple-400' },
+  { name: 'Expert', minXP: 1000, icon: '🏆', color: 'from-amber-500 to-yellow-400' },
+  { name: 'Master', minXP: 2000, icon: '👑', color: 'from-orange-500 to-red-400' },
+  { name: 'Genius', minXP: 5000, icon: '🧠', color: 'from-pink-500 to-rose-400' },
+]
+
+const SKILL_LEVELS = {
+  'needs-practice': { label: 'Needs Practice', color: 'text-amber-400', bg: 'bg-amber-500/20' },
+  'building': { label: 'Building Up', color: 'text-blue-400', bg: 'bg-blue-500/20' },
+  'confident': { label: 'Confident', color: 'text-green-400', bg: 'bg-green-500/20' },
+  'mastered': { label: 'Mastered', color: 'text-purple-400', bg: 'bg-purple-500/20' },
+}
 
 // Subject icons/colors - updated with new color palette
 const subjectStyles = {
@@ -36,6 +65,30 @@ const subjectStyles = {
 
 // Check if mobile
 const isMobile = () => window.innerWidth < 768
+
+// Get user's rank based on XP
+const getRank = (xp) => {
+  for (let i = RANKS.length - 1; i >= 0; i--) {
+    if (xp >= RANKS[i].minXP) return RANKS[i]
+  }
+  return RANKS[0]
+}
+
+// Get next rank info
+const getNextRank = (xp) => {
+  for (let i = 0; i < RANKS.length; i++) {
+    if (xp < RANKS[i].minXP) return RANKS[i]
+  }
+  return null
+}
+
+// Get skill level based on accuracy
+const getSkillLevel = (accuracy) => {
+  if (accuracy >= 90) return 'mastered'
+  if (accuracy >= 70) return 'confident'
+  if (accuracy >= 50) return 'building'
+  return 'needs-practice'
+}
 
 // Robust JSON parser - handles large/malformed AI responses
 const safeParseJSON = (text, fallback = []) => {
@@ -184,7 +237,7 @@ export default function ExamPrep() {
   const [sidebarOpen, setSidebarOpen] = useState(() => !isMobile())
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   
-  // Views: home, course, assessment, lesson-step, quiz, results, chat
+  // Views: home, course, assessment, lesson-step, quiz, results, chat, challenge
   const [view, setView] = useState('home')
   const [courses, setCourses] = useState(() => {
     try {
@@ -192,6 +245,34 @@ export default function ExamPrep() {
       return saved ? JSON.parse(saved) : []
     } catch { return [] }
   })
+  
+  // Gamification - User Progress
+  const [userProgress, setUserProgress] = useState(() => {
+    try {
+      const saved = localStorage.getItem(PROGRESS_KEY)
+      return saved ? JSON.parse(saved) : {
+        xp: 0,
+        totalCorrect: 0,
+        totalAnswered: 0,
+        streak: 0,
+        lastActiveDate: null,
+        topicAccuracy: {}, // { "topic": { correct: 0, total: 0 } }
+        achievements: [],
+        challengesWon: 0
+      }
+    } catch { 
+      return { xp: 0, totalCorrect: 0, totalAnswered: 0, streak: 0, lastActiveDate: null, topicAccuracy: {}, achievements: [], challengesWon: 0 }
+    }
+  })
+  
+  // XP animation
+  const [xpGain, setXpGain] = useState(null) // { amount: 10, reason: "Correct!" }
+  const [showLevelUp, setShowLevelUp] = useState(null) // rank object
+  
+  // Challenge mode
+  const [challengeMode, setChallengeMode] = useState(null) // 'timed', 'survival', 'boss'
+  const [challengeTimer, setChallengeTimer] = useState(0)
+  const [challengeLives, setChallengeLives] = useState(3)
   
   const [activeCourse, setActiveCourse] = useState(null)
   const [activeLesson, setActiveLesson] = useState(null)
@@ -287,6 +368,79 @@ export default function ExamPrep() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(courses))
   }, [courses])
+  
+  // Save user progress
+  useEffect(() => {
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(userProgress))
+  }, [userProgress])
+  
+  // Check and update streak on load
+  useEffect(() => {
+    const today = new Date().toDateString()
+    const lastActive = userProgress.lastActiveDate
+    
+    if (lastActive) {
+      const lastDate = new Date(lastActive)
+      const daysDiff = Math.floor((new Date(today) - lastDate) / (1000 * 60 * 60 * 24))
+      
+      if (daysDiff > 1) {
+        // Streak broken
+        setUserProgress(prev => ({ ...prev, streak: 0, lastActiveDate: today }))
+      } else if (daysDiff === 1) {
+        // New day, streak continues
+        setUserProgress(prev => ({ ...prev, streak: prev.streak + 1, lastActiveDate: today }))
+        // Streak bonus XP
+        awardXP(XP_REWARDS.streakBonus * (userProgress.streak + 1), `🔥 ${userProgress.streak + 1} day streak!`)
+      }
+    } else {
+      setUserProgress(prev => ({ ...prev, lastActiveDate: today, streak: 1 }))
+    }
+  }, [])
+
+  // Award XP with animation
+  const awardXP = (amount, reason = 'XP earned!') => {
+    const oldRank = getRank(userProgress.xp)
+    const newXP = userProgress.xp + amount
+    const newRank = getRank(newXP)
+    
+    setUserProgress(prev => ({ ...prev, xp: prev.xp + amount }))
+    setXpGain({ amount, reason })
+    
+    // Check for level up
+    if (newRank.name !== oldRank.name) {
+      setTimeout(() => setShowLevelUp(newRank), 1000)
+    }
+    
+    // Clear animation after 2s
+    setTimeout(() => setXpGain(null), 2000)
+  }
+  
+  // Track answer accuracy by topic
+  const trackAnswer = (topic, isCorrect) => {
+    setUserProgress(prev => {
+      const topicData = prev.topicAccuracy[topic] || { correct: 0, total: 0 }
+      return {
+        ...prev,
+        totalCorrect: prev.totalCorrect + (isCorrect ? 1 : 0),
+        totalAnswered: prev.totalAnswered + 1,
+        topicAccuracy: {
+          ...prev.topicAccuracy,
+          [topic]: {
+            correct: topicData.correct + (isCorrect ? 1 : 0),
+            total: topicData.total + 1
+          }
+        }
+      }
+    })
+  }
+  
+  // Get topics that need more practice (accuracy < 70%)
+  const getWeakTopics = () => {
+    return Object.entries(userProgress.topicAccuracy)
+      .filter(([_, data]) => data.total >= 3 && (data.correct / data.total) < 0.7)
+      .map(([topic, data]) => ({ topic, accuracy: Math.round((data.correct / data.total) * 100) }))
+      .sort((a, b) => a.accuracy - b.accuracy)
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -949,8 +1103,28 @@ Return ONLY valid JSON array:
 
   const submitQuizAnswer = () => {
     if (selectedAnswer === null) return
-    setAnswers([...answers, { selected: selectedAnswer, correct: selectedAnswer === questions[currentQ].correct }])
+    const isCorrect = selectedAnswer === questions[currentQ].correct
+    const topic = activeLesson?.title || activeCourse?.name || 'General'
+    
+    setAnswers([...answers, { selected: selectedAnswer, correct: isCorrect }])
     setShowExplanation(true)
+    
+    // Track and award XP
+    trackAnswer(topic, isCorrect)
+    
+    if (isCorrect) {
+      awardXP(XP_REWARDS.correctAnswer, '✅ Correct!')
+      
+      // Bonus for first try (no wrong answers on this question yet)
+      if (answers.filter((_, i) => i === currentQ).length === 0) {
+        awardXP(XP_REWARDS.firstTry, '⚡ First try bonus!')
+      }
+    }
+    
+    // Challenge mode: survival
+    if (challengeMode === 'survival' && !isCorrect) {
+      setChallengeLives(prev => prev - 1)
+    }
   }
 
   const nextQuizQuestion = () => {
@@ -961,6 +1135,19 @@ Return ONLY valid JSON array:
     } else {
       // Quiz complete
       const score = answers.filter(a => a.correct).length
+      const isPerfect = score === questions.length
+      
+      // Award XP for completion
+      if (isPerfect) {
+        awardXP(XP_REWARDS.perfectQuiz, '🎯 Perfect score!')
+      }
+      awardXP(XP_REWARDS.lessonComplete, '📚 Lesson complete!')
+      
+      // Challenge mode bonus
+      if (challengeMode && score >= questions.length * 0.7) {
+        awardXP(XP_REWARDS.challengeWin, '🏆 Challenge completed!')
+        setUserProgress(prev => ({ ...prev, challengesWon: prev.challengesWon + 1 }))
+      }
       
       // Update lesson progress
       const updated = { ...activeCourse }
@@ -974,6 +1161,8 @@ Return ONLY valid JSON array:
         setActiveCourse(updated)
       }
       
+      // Reset challenge mode
+      setChallengeMode(null)
       setView('results')
     }
   }
@@ -1543,6 +1732,111 @@ Problem: ${chatInput}`
           {/* HOME - Dashboard */}
           {view === 'home' && (
             <div className="p-4 md:p-6 max-w-6xl mx-auto">
+              {/* XP & Progress Card */}
+              <div className="bg-gradient-to-br from-surface-800 to-surface-900 rounded-2xl p-4 md:p-6 border border-white/5 mb-6">
+                <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
+                  {/* Rank & XP */}
+                  <div className="flex items-center gap-4 flex-1">
+                    <div className={`w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br ${getRank(userProgress.xp).color} flex items-center justify-center text-3xl md:text-4xl shadow-lg`}>
+                      {getRank(userProgress.xp).icon}
+                    </div>
+                    <div>
+                      <p className="text-gray-400 text-sm">Your Rank</p>
+                      <h2 className="text-xl md:text-2xl font-bold">{getRank(userProgress.xp).name}</h2>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Zap className="h-4 w-4 text-amber-400" />
+                        <span className="text-amber-400 font-semibold">{userProgress.xp} XP</span>
+                        {getNextRank(userProgress.xp) && (
+                          <span className="text-gray-500 text-sm">/ {getNextRank(userProgress.xp).minXP} to {getNextRank(userProgress.xp).name}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Stats */}
+                  <div className="flex gap-4 md:gap-6">
+                    <div className="bg-white/5 rounded-xl px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-1.5 text-orange-400 mb-1">
+                        <Flame className="h-5 w-5" />
+                        <span className="text-xl font-bold">{userProgress.streak}</span>
+                      </div>
+                      <p className="text-xs text-gray-500">Day Streak</p>
+                    </div>
+                    <div className="bg-white/5 rounded-xl px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-1.5 text-green-400 mb-1">
+                        <Target className="h-5 w-5" />
+                        <span className="text-xl font-bold">{userProgress.totalAnswered > 0 ? Math.round((userProgress.totalCorrect / userProgress.totalAnswered) * 100) : 0}%</span>
+                      </div>
+                      <p className="text-xs text-gray-500">Accuracy</p>
+                    </div>
+                    <div className="bg-white/5 rounded-xl px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-1.5 text-purple-400 mb-1">
+                        <Trophy className="h-5 w-5" />
+                        <span className="text-xl font-bold">{userProgress.challengesWon}</span>
+                      </div>
+                      <p className="text-xs text-gray-500">Challenges</p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* XP Progress Bar */}
+                {getNextRank(userProgress.xp) && (
+                  <div className="mt-4">
+                    <div className="bg-surface-700 rounded-full h-2 overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full bg-gradient-to-r ${getRank(userProgress.xp).color} transition-all duration-500`}
+                        style={{ width: `${Math.min(100, ((userProgress.xp - getRank(userProgress.xp).minXP) / (getNextRank(userProgress.xp).minXP - getRank(userProgress.xp).minXP)) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Topics to Practice (Weak Areas) */}
+              {getWeakTopics().length > 0 && (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 mb-6">
+                  <h3 className="font-medium text-amber-400 flex items-center gap-2 mb-3">
+                    <TrendingUp className="h-5 w-5" />
+                    Focus Areas - Let's improve these!
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {getWeakTopics().slice(0, 5).map(({ topic, accuracy }) => (
+                      <span key={topic} className="bg-amber-500/20 text-amber-300 px-3 py-1.5 rounded-lg text-sm">
+                        {topic} ({accuracy}%)
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Challenge Mode Quick Start */}
+              <div className="grid grid-cols-3 gap-3 mb-6">
+                <button 
+                  onClick={() => { setChallengeMode('timed'); setChallengeTimer(60); }}
+                  className="bg-surface-800/60 hover:bg-surface-700/60 border border-white/5 hover:border-primary-500/30 rounded-xl p-4 text-center transition-all cursor-pointer group"
+                >
+                  <Timer className="h-6 w-6 text-blue-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                  <p className="font-medium text-sm">Speed Run</p>
+                  <p className="text-xs text-gray-500">60s timer</p>
+                </button>
+                <button 
+                  onClick={() => { setChallengeMode('survival'); setChallengeLives(3); }}
+                  className="bg-surface-800/60 hover:bg-surface-700/60 border border-white/5 hover:border-red-500/30 rounded-xl p-4 text-center transition-all cursor-pointer group"
+                >
+                  <Heart className="h-6 w-6 text-red-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                  <p className="font-medium text-sm">Survival</p>
+                  <p className="text-xs text-gray-500">3 lives</p>
+                </button>
+                <button 
+                  onClick={() => setChallengeMode('boss')}
+                  className="bg-surface-800/60 hover:bg-surface-700/60 border border-white/5 hover:border-purple-500/30 rounded-xl p-4 text-center transition-all cursor-pointer group"
+                >
+                  <Swords className="h-6 w-6 text-purple-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                  <p className="font-medium text-sm">Boss Fight</p>
+                  <p className="text-xs text-gray-500">Hard mode</p>
+                </button>
+              </div>
+              
               {/* Search & Filter - Mobile optimized */}
               <div className="flex flex-col md:flex-row gap-3 md:gap-4 mb-6 md:mb-8">
                 <div className="relative flex-1">
@@ -2208,134 +2502,136 @@ Problem: ${chatInput}`
           {/* RESULTS */}
           {view === 'results' && (
             <div className="max-w-2xl mx-auto p-6">
-              <div className="bg-gray-900/50 rounded-2xl border border-gray-800 p-8 text-center">
+              <div className="bg-surface-800/60 rounded-2xl border border-white/5 p-8 text-center">
                 {assessmentResults ? (
                   // Assessment Results
                   <>
                     <div className={`w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center ${
-                      assessmentResults.percentage >= 70 ? 'bg-green-500/20' : assessmentResults.percentage >= 40 ? 'bg-amber-500/20' : 'bg-primary-500/20'
+                      assessmentResults.percentage >= 70 ? 'bg-green-500/20' : assessmentResults.percentage >= 40 ? 'bg-amber-500/20' : 'bg-blue-500/20'
                     }`}>
                       <span className={`text-4xl font-bold ${
-                        assessmentResults.percentage >= 70 ? 'text-green-400' : assessmentResults.percentage >= 40 ? 'text-amber-400' : 'text-primary-400'
+                        assessmentResults.percentage >= 70 ? 'text-green-400' : assessmentResults.percentage >= 40 ? 'text-amber-400' : 'text-blue-400'
                       }`}>
                         {assessmentResults.percentage}%
                       </span>
                     </div>
                     
                     <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full mb-4 ${
-                      assessmentResults.level === 'Advanced' ? 'bg-green-500/20 text-green-400' :
-                      assessmentResults.level === 'Intermediate' ? 'bg-amber-500/20 text-amber-400' :
-                      'bg-primary-500/20 text-primary-400'
+                      assessmentResults.level === 'Advanced' ? 'bg-purple-500/20 text-purple-400' :
+                      assessmentResults.level === 'Intermediate' ? 'bg-blue-500/20 text-blue-400' :
+                      'bg-green-500/20 text-green-400'
                     }`}>
                       <Star className="h-4 w-4" />
-                      {assessmentResults.level} Level
+                      {assessmentResults.level === 'Beginner' ? 'Ready to Learn' : assessmentResults.level === 'Intermediate' ? 'Building Strong' : 'Already Expert'}
                     </div>
                     
-                    <h2 className="text-2xl font-bold mb-2">Assessment Complete!</h2>
+                    <h2 className="text-2xl font-bold mb-2">Great Start! 🎉</h2>
                     <p className="text-gray-400 mb-6">{assessmentResults.message}</p>
                     
-                    <div className="text-left bg-gray-800/50 rounded-xl p-4 mb-6">
-                      <h3 className="font-medium mb-3">Your Performance by Topic:</h3>
-                      <div className="space-y-2">
-                        {Object.entries(assessmentResults.byTopic).map(([topic, data]) => (
-                          <div key={topic} className="flex items-center gap-3">
-                            <div className="flex-1">
-                              <div className="flex justify-between text-sm mb-1">
-                                <span className="text-gray-300">{topic}</span>
-                                <span className={data.correct === data.total ? 'text-green-400' : 'text-gray-400'}>
-                                  {data.correct}/{data.total}
-                                </span>
-                              </div>
-                              <div className="bg-gray-700 rounded-full h-2">
-                                <div 
-                                  className={`h-2 rounded-full ${data.correct === data.total ? 'bg-green-500' : 'bg-primary-500'}`}
-                                  style={{ width: `${(data.correct / data.total) * 100}%` }}
-                                />
+                    <div className="text-left bg-surface-700/50 rounded-xl p-4 mb-6">
+                      <h3 className="font-medium mb-3 flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5 text-primary-400" />
+                        Your Skill Breakdown
+                      </h3>
+                      <div className="space-y-3">
+                        {Object.entries(assessmentResults.byTopic).map(([topic, data]) => {
+                          const accuracy = Math.round((data.correct / data.total) * 100)
+                          const skill = getSkillLevel(accuracy)
+                          return (
+                            <div key={topic} className="flex items-center gap-3">
+                              <div className="flex-1">
+                                <div className="flex justify-between text-sm mb-1">
+                                  <span className="text-gray-300">{topic}</span>
+                                  <span className={`${SKILL_LEVELS[skill].color} ${SKILL_LEVELS[skill].bg} px-2 py-0.5 rounded text-xs`}>
+                                    {SKILL_LEVELS[skill].label}
+                                  </span>
+                                </div>
+                                <div className="bg-surface-700 rounded-full h-2">
+                                  <div 
+                                    className={`h-2 rounded-full transition-all duration-500 ${
+                                      accuracy >= 90 ? 'bg-purple-500' : accuracy >= 70 ? 'bg-green-500' : accuracy >= 50 ? 'bg-blue-500' : 'bg-amber-500'
+                                    }`}
+                                    style={{ width: `${accuracy}%` }}
+                                  />
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     </div>
                     
                     <button 
                       onClick={() => { setAssessmentResults(null); setView('course') }}
-                      className="w-full bg-primary-600 hover:bg-primary-500 py-3 rounded-xl font-medium flex items-center justify-center gap-2"
+                      className="w-full bg-primary-600 hover:bg-primary-500 py-3 rounded-xl font-medium flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      Start Learning <ArrowRight className="h-5 w-5" />
+                      Let's Start Learning! <ArrowRight className="h-5 w-5" />
                     </button>
                   </>
                 ) : (
                   // Quiz Results
                   <>
-                    <div className={`w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center ${
-                      answers.filter(a => a.correct).length >= 4 ? 'bg-green-500/20' : 
-                      answers.filter(a => a.correct).length >= 2 ? 'bg-amber-500/20' : 'bg-red-500/20'
-                    }`}>
-                      <Trophy className={`h-10 w-10 ${
-                        answers.filter(a => a.correct).length >= 4 ? 'text-green-400' : 
-                        answers.filter(a => a.correct).length >= 2 ? 'text-amber-400' : 'text-red-400'
-                      }`} />
-                    </div>
-                    
-                    <h2 className="text-2xl font-bold mb-2">Quiz Complete!</h2>
-                    <p className="text-4xl font-bold text-primary-400 mb-6">
-                      {answers.filter(a => a.correct).length}/{questions.length}
-                    </p>
-                    
-                    <div className="text-left mb-6">
-                      <h3 className="font-medium mb-3">Your Answers:</h3>
-                      <div className="space-y-2">
-                        {questions.map((q, i) => (
-                          <div key={i} className={`p-3 rounded-lg ${answers[i]?.correct ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
-                            <div className="flex items-start gap-2">
-                              {answers[i]?.correct ? (
-                                <Check className="h-5 w-5 text-green-400 shrink-0 mt-0.5" />
-                              ) : (
-                                <X className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
-                              )}
-                              <div className="text-sm">
-                                <MarkdownRenderer content={q.question} />
-                                {!answers[i]?.correct && (
-                                  <p className="text-green-400 mt-1">Correct: {q.options[q.correct]}</p>
-                                )}
-                              </div>
+                    {(() => {
+                      const score = answers.filter(a => a.correct).length
+                      const total = questions.length
+                      const percentage = Math.round((score / total) * 100)
+                      const isPerfect = score === total
+                      const isGood = percentage >= 70
+                      
+                      return (
+                        <>
+                          <div className={`w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center ${
+                            isPerfect ? 'bg-purple-500/20' : isGood ? 'bg-green-500/20' : 'bg-blue-500/20'
+                          }`}>
+                            {isPerfect ? (
+                              <span className="text-5xl">🏆</span>
+                            ) : isGood ? (
+                              <Trophy className="h-12 w-12 text-green-400" />
+                            ) : (
+                              <span className="text-5xl">💪</span>
+                            )}
+                          </div>
+                          
+                          <h2 className="text-2xl font-bold mb-2">
+                            {isPerfect ? 'Perfect Score! 🎉' : isGood ? 'Great Job! 🌟' : 'Good Effort! 💪'}
+                          </h2>
+                          
+                          <p className="text-5xl font-bold bg-gradient-to-r from-primary-400 to-primary-300 bg-clip-text text-transparent mb-2">
+                            {score}/{total}
+                          </p>
+                          
+                          <p className="text-gray-400 mb-6">
+                            {isPerfect ? "You've mastered this topic!" : 
+                             isGood ? "You're doing amazing! Keep it up!" :
+                             "Every question makes you stronger. Keep practicing!"}
+                          </p>
+                          
+                          {/* XP Summary */}
+                          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-6">
+                            <div className="flex items-center justify-center gap-3 text-amber-400 font-semibold">
+                              <Zap className="h-5 w-5" />
+                              <span>+{score * XP_REWARDS.correctAnswer + (isPerfect ? XP_REWARDS.perfectQuiz : 0) + XP_REWARDS.lessonComplete} XP earned!</span>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    {answers.filter(a => !a.correct).length > 0 && (
-                      <div className="bg-gray-800 rounded-xl p-4 mb-6 text-left">
-                        <div className="flex items-center gap-2 mb-2">
-                          <HelpCircle className="h-5 w-5 text-primary-400" />
-                          <span className="font-medium">Need help understanding?</span>
-                        </div>
-                        <p className="text-sm text-gray-400 mb-3">I can explain the questions you got wrong.</p>
-                        <button
-                          onClick={() => {
-                            setMessages([{
-                              role: 'assistant',
-                              content: `I noticed you had some trouble with a few questions. Let me help! 🎯\n\nWhich one would you like me to explain?\n\n${questions.filter((_, i) => !answers[i]?.correct).map((q, i) => `${i + 1}. ${q.question}`).join('\n\n')}`
-                            }])
-                            setView('lesson-step')
-                          }}
-                          className="bg-primary-600 hover:bg-primary-500 px-4 py-2 rounded-lg text-sm font-medium"
-                        >
-                          Get AI Help
-                        </button>
-                      </div>
-                    )}
-                    
-                    <div className="flex gap-3">
-                      <button onClick={() => setView('course')} className="flex-1 bg-gray-800 hover:bg-gray-700 py-3 rounded-xl font-medium">
-                        Back to Course
-                      </button>
-                      <button onClick={() => startQuiz(activeLesson)} className="flex-1 bg-primary-600 hover:bg-primary-500 py-3 rounded-xl font-medium flex items-center justify-center gap-2">
-                        <RotateCcw className="h-4 w-4" /> Retry Quiz
-                      </button>
-                    </div>
+                          
+                          <div className="grid grid-cols-2 gap-3">
+                            <button 
+                              onClick={() => { startQuiz(activeLesson); }}
+                              className="bg-surface-700 hover:bg-surface-600 py-3 rounded-xl font-medium flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                              Try Again
+                            </button>
+                            <button 
+                              onClick={() => setView('course')}
+                              className="bg-primary-600 hover:bg-primary-500 py-3 rounded-xl font-medium flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                              Continue <ArrowRight className="h-5 w-5" />
+                            </button>
+                          </div>
+                        </>
+                      )
+                    })()}
                   </>
                 )}
               </div>
@@ -2895,6 +3191,72 @@ Problem: ${chatInput}`
           </button>
         </div>
       </nav>
+      
+      {/* XP Gain Animation */}
+      {xpGain && (
+        <div className="fixed top-20 right-4 md:right-8 z-50 animate-bounce">
+          <div className="bg-amber-500 text-amber-900 px-4 py-2 rounded-xl font-bold shadow-lg shadow-amber-500/30 flex items-center gap-2">
+            <Zap className="h-5 w-5" />
+            +{xpGain.amount} XP
+            <span className="text-sm font-normal">{xpGain.reason}</span>
+          </div>
+        </div>
+      )}
+      
+      {/* Level Up Overlay */}
+      {showLevelUp && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowLevelUp(null)}>
+          <div className="bg-surface-800 rounded-3xl p-8 text-center max-w-sm mx-4 border border-white/10 animate-pulse">
+            <div className={`w-24 h-24 rounded-3xl bg-gradient-to-br ${showLevelUp.color} flex items-center justify-center text-5xl mx-auto mb-6 shadow-2xl`}>
+              {showLevelUp.icon}
+            </div>
+            <h2 className="text-2xl font-bold mb-2">Level Up!</h2>
+            <p className="text-3xl font-bold bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent mb-4">
+              {showLevelUp.name}
+            </p>
+            <p className="text-gray-400 mb-6">Keep learning to unlock more ranks!</p>
+            <button 
+              onClick={() => setShowLevelUp(null)}
+              className="px-8 py-3 bg-primary-600 hover:bg-primary-500 rounded-xl font-medium transition-colors cursor-pointer"
+            >
+              Awesome! 🎉
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Challenge Mode Indicator */}
+      {challengeMode && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50">
+          <div className={`px-4 py-2 rounded-xl font-medium flex items-center gap-3 shadow-lg ${
+            challengeMode === 'survival' ? 'bg-red-500/20 border border-red-500/30 text-red-400' :
+            challengeMode === 'timed' ? 'bg-blue-500/20 border border-blue-500/30 text-blue-400' :
+            'bg-purple-500/20 border border-purple-500/30 text-purple-400'
+          }`}>
+            {challengeMode === 'survival' && (
+              <>
+                <Heart className="h-5 w-5" />
+                <span>{challengeLives} Lives</span>
+              </>
+            )}
+            {challengeMode === 'timed' && (
+              <>
+                <Timer className="h-5 w-5" />
+                <span>{challengeTimer}s</span>
+              </>
+            )}
+            {challengeMode === 'boss' && (
+              <>
+                <Swords className="h-5 w-5" />
+                <span>Boss Fight</span>
+              </>
+            )}
+            <button onClick={() => setChallengeMode(null)} className="ml-2 hover:text-white">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
