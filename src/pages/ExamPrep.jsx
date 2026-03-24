@@ -2413,7 +2413,11 @@ Problem: ${chatInput}`
                 </div>
 
                 {showMathKeyboard && mathMode && (
-                  <MathKeyboard onInsert={handleChatKeyboardInsert} onClose={() => setShowMathKeyboard(false)} />
+                  <MathKeyboard 
+                    value={chatInput}
+                    onInsert={handleChatKeyboardInsert} 
+                    onClose={() => setShowMathKeyboard(false)} 
+                  />
                 )}
               </div>
             </div>
