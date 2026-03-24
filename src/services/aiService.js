@@ -129,14 +129,20 @@ Guidelines:
 - Being patient and supportive
 Use markdown formatting for clarity.`
 
+  const safeMessages = Array.isArray(messages)
+    ? messages
+        .filter((msg) => msg && typeof msg === 'object')
+        .map((msg) => ({
+          role: msg.role === 'assistant' ? 'assistant' : 'user',
+          content: typeof msg.content === 'string' ? msg.content : ''
+        }))
+    : []
+
   // Build messages with system prompt as first user message if needed
   const apiMessages = [
     { role: 'user', content: systemPrompt },
     { role: 'assistant', content: 'I understand. I will help you learn effectively with clear explanations and step-by-step guidance. How can I help you today?' },
-    ...messages.map(msg => ({
-      role: msg.role,
-      content: msg.content
-    }))
+    ...safeMessages
   ]
 
   const requestBody = {
@@ -146,7 +152,7 @@ Use markdown formatting for clarity.`
   }
 
   try {
-    logAi(reqId, 'request', { endpoint: `${API_BASE_URL}/v1/messages`, model: MODEL, subject, messageCount: messages?.length || 0 })
+    logAi(reqId, 'request', { endpoint: `${API_BASE_URL}/v1/messages`, model: MODEL, subject, messageCount: safeMessages.length })
     const response = await fetch(`${API_BASE_URL}/v1/messages`, {
       method: 'POST',
       headers: {
