@@ -9,6 +9,10 @@ const logAi = (...args) => {
   if (DEBUG_AI) console.log('[AI Service]', ...args)
 }
 
+const normalizeAssistantIdentity = (text) => String(text || '')
+  .replace(/\bantigravity ai\b/gi, 'Kira AI')
+  .replace(/\bantigravity\b/gi, 'Kira AI')
+
 const extractTextFromApiData = (data) => {
   if (!data) return null
 
@@ -35,6 +39,7 @@ const extractTextFromApiData = (data) => {
 export const analyzeDocument = async (content, fileType, subject, question) => {
   const reqId = `doc-${Date.now()}`
   const systemPrompt = `You are an expert AI tutor helping a student study for their ${subject || 'exam'}. 
+Your assistant name is Kira AI. If referring to yourself, always say Kira AI.
 The student has uploaded study materials. Analyze the content and help them understand it.
 
 Guidelines:
@@ -98,7 +103,7 @@ Guidelines:
     }
 
     const text = extractTextFromApiData(data)
-    if (typeof text === 'string' && text.trim()) return { content: text }
+    if (typeof text === 'string' && text.trim()) return { content: normalizeAssistantIdentity(text) }
     logAi(reqId, 'unexpected_format', { keys: Object.keys(data || {}), contentType: typeof data?.content })
     throw new Error(`Unexpected response format: ${JSON.stringify(data).substring(0, 200)}`)
   } catch (error) {
@@ -110,7 +115,8 @@ Guidelines:
 export const sendMessage = async (messages, subject = null, onChunk = null) => {
   const reqId = `msg-${Date.now()}`
   const systemPrompt = subject 
-    ? `You are an expert AI tutor specializing in ${subject}. Your role is to help students understand concepts deeply, not just give answers. 
+    ? `You are an expert AI tutor specializing in ${subject}. Your role is to help students understand concepts deeply, not just give answers.
+    Your assistant name is Kira AI. If referring to yourself, always say Kira AI.
     
 Guidelines:
 - Break down complex problems into smaller, manageable steps
@@ -121,7 +127,9 @@ Guidelines:
 - If the student is stuck, give hints before revealing solutions
 - For math/science problems, show your work step by step
 - Use markdown formatting for better readability (code blocks, lists, bold for key terms)`
-    : `You are a friendly and knowledgeable AI tutor. Help students learn effectively by:
+    : `You are a friendly and knowledgeable AI tutor.
+Your assistant name is Kira AI. If referring to yourself, always say Kira AI.
+Help students learn effectively by:
 - Breaking down complex topics into understandable parts
 - Providing step-by-step explanations
 - Using examples and analogies
@@ -182,8 +190,9 @@ Use markdown formatting for clarity.`
     const text = extractTextFromApiData(data)
     if (typeof text === 'string' && text.trim()) {
       logAi(reqId, 'success', { textLength: text.length })
-      if (onChunk) onChunk(text)
-      return { content: text }
+      const normalized = normalizeAssistantIdentity(text)
+      if (onChunk) onChunk(normalized)
+      return { content: normalized }
     }
     logAi(reqId, 'unexpected_format', { keys: Object.keys(data || {}), contentType: typeof data?.content })
     throw new Error(`Unexpected response format: ${JSON.stringify(data).substring(0, 200)}`)
@@ -196,8 +205,8 @@ Use markdown formatting for clarity.`
 export const analyzeImage = async (imageBase64, question, subject = null) => {
   const reqId = `img-${Date.now()}`
   const systemContext = subject
-    ? `You are an expert AI tutor specializing in ${subject}. The student has shared an image (likely a problem or question). Analyze it carefully and help them understand and solve it step by step.`
-    : `You are a helpful AI tutor. The student has shared an image. Analyze it and provide helpful guidance.`
+    ? `You are an expert AI tutor specializing in ${subject}. Your assistant name is Kira AI. If referring to yourself, always say Kira AI. The student has shared an image (likely a problem or question). Analyze it carefully and help them understand and solve it step by step.`
+    : `You are a helpful AI tutor. Your assistant name is Kira AI. If referring to yourself, always say Kira AI. The student has shared an image. Analyze it and provide helpful guidance.`
 
   const requestBody = {
     model: MODEL,
@@ -251,7 +260,7 @@ export const analyzeImage = async (imageBase64, question, subject = null) => {
     const text = extractTextFromApiData(data)
     if (typeof text === 'string' && text.trim()) {
       logAi(reqId, 'success', { textLength: text.length })
-      return { content: text }
+      return { content: normalizeAssistantIdentity(text) }
     }
     logAi(reqId, 'unexpected_format', { keys: Object.keys(data || {}), contentType: typeof data?.content })
     throw new Error(`Unexpected response format: ${JSON.stringify(data).substring(0, 200)}`)
