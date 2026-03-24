@@ -435,6 +435,8 @@ export default function ExamPrep() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef(null)
+  const lessonFileInputRef = useRef(null)
+  const [lessonAttachment, setLessonAttachment] = useState(null) // { type: 'image'|'pdf', name, data?, text? }
   const [lessonContent, setLessonContent] = useState([]) // Steps in lesson
   const [stepCheckShown, setStepCheckShown] = useState({})
   const isRestoringLessonRef = useRef(false)
@@ -457,6 +459,7 @@ export default function ExamPrep() {
   const chatEndRef = useRef(null)
   const chatFileInputRef = useRef(null)
   const [chatImage, setChatImage] = useState(null)
+  const [chatAttachment, setChatAttachment] = useState(null) // { type: 'pdf', name, text, pages }
   const [chatHistoryByCourse, setChatHistoryByCourse] = useState(() => {
     try {
       const saved = localStorage.getItem(CHAT_HISTORY_KEY)
@@ -1164,7 +1167,8 @@ Be friendly and make it engaging!`
       // Show first step
       setMessages([{
         role: 'assistant',
-        content: `# ${steps[0].title}\n\n${steps[0].content}`
+        content: `# ${steps[0].title}\n\n${steps[0].content}`,
+        diagram: inferDiagramRequest(steps[0].content)
       }])
     } catch (error) {
       console.error('Lesson error:', error)
@@ -1178,20 +1182,39 @@ Be friendly and make it engaging!`
   }
 
   const handleStepResponse = async () => {
-    if (!input.trim() || isLoading) return
+    if ((!input.trim() && !lessonAttachment) || isLoading) return
     
     const userMsg = input.trim()
+    const currentAttachment = lessonAttachment
+    let attachmentContext = ''
+    let attachmentPreview = null
+    if (currentAttachment?.type === 'pdf') {
+      attachmentContext = `\n\nStudent attached PDF "${currentAttachment.name}". Use this as context:\n${currentAttachment.text || ''}`
+      attachmentPreview = { type: 'pdf', name: currentAttachment.name }
+    } else if (currentAttachment?.type === 'image') {
+      attachmentPreview = { type: 'image', name: currentAttachment.name, data: currentAttachment.data }
+    }
     setInput('')
-    setMessages(prev => [...prev, { role: 'user', content: userMsg }])
+    setLessonAttachment(null)
+    setMessages(prev => [...prev, { role: 'user', content: userMsg || 'Please analyze my attachment.', attachment: attachmentPreview }])
     setIsLoading(true)
     
     try {
+      if (currentAttachment?.type === 'image') {
+        const imageAnalysis = await analyzeImage(
+          currentAttachment.data,
+          `Describe this educational image clearly for a student studying "${activeLesson?.title || activeCourse?.name || 'the topic'}".`,
+          activeCourse?.name || 'General'
+        )
+        attachmentContext = `\n\nStudent attached image "${currentAttachment.name}". Image analysis:\n${imageAnalysis?.content || ''}`
+      }
       const currentStepData = lessonContent[currentStep]
       
       // Check if user understood
-      const checkPrompt = `Student answered: "${userMsg}"
+      const checkPrompt = `Student answered: "${userMsg || 'Used an attachment'}"
 Expected concept: "${currentStepData?.checkAnswer || 'understanding'}"
 Question was: "${currentStepData?.checkQuestion || 'Do you understand?'}"
+${attachmentContext}
 
 Evaluate if the student understood (even partially).
 If they need help, explain briefly.
@@ -1212,7 +1235,7 @@ Be encouraging and use emojis!`
         const finalResponse = lastAssistant && cleanEscapedText(lastAssistant.content) === cleanEscapedText(cleanedResponse)
           ? "Great progress. Let's continue to the next part."
           : cleanedResponse
-        return [...prev, { role: 'assistant', content: finalResponse }]
+        return [...prev, { role: 'assistant', content: finalResponse, diagram: inferDiagramRequest(`${userMsg}\n${finalResponse}`) }]
       })
       setStepCheckShown(prev => ({ ...prev, [currentStep]: true }))
       
@@ -1222,7 +1245,8 @@ Be encouraging and use emojis!`
           setCurrentStep(currentStep + 1)
           setMessages(prev => [...prev, {
             role: 'assistant',
-            content: `# ${lessonContent[currentStep + 1].title}\n\n${lessonContent[currentStep + 1].content}`
+            content: `# ${lessonContent[currentStep + 1].title}\n\n${lessonContent[currentStep + 1].content}`,
+            diagram: inferDiagramRequest(lessonContent[currentStep + 1].content)
           }])
         }, 1500)
       } else if (aiResponse.includes('READY_NEXT') && currentStep === lessonContent.length - 1) {
@@ -1696,9 +1720,59 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
   const handleChatImageUpload = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.type === 'application/pdf') {
+      handleChatPdfUpload(file)
+      if (chatFileInputRef.current) chatFileInputRef.current.value = ''
+      return
+    }
     const reader = new FileReader()
     reader.onload = (e) => setChatImage(e.target.result)
     reader.readAsDataURL(file)
+    if (chatFileInputRef.current) chatFileInputRef.current.value = ''
+  }
+
+  const handleChatPdfUpload = async (file) => {
+    try {
+      const { fullText, pages } = await extractTextFromPDF(file)
+      setChatAttachment({
+        type: 'pdf',
+        name: file.name,
+        text: fullText.substring(0, 15000),
+        pages: (pages || []).slice(0, 50)
+      })
+    } catch (err) {
+      console.error('PDF upload error:', err)
+      alert('Could not read PDF. Please try another file.')
+    }
+  }
+
+  const handleLessonAttachmentUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      if (file.type === 'application/pdf') {
+        const { fullText, pages } = await extractTextFromPDF(file)
+        setLessonAttachment({
+          type: 'pdf',
+          name: file.name,
+          text: fullText.substring(0, 15000),
+          pages: (pages || []).slice(0, 50)
+        })
+      } else if (file.type.startsWith('image/')) {
+        const reader = new FileReader()
+        reader.onload = (ev) => setLessonAttachment({
+          type: 'image',
+          name: file.name,
+          data: ev.target.result
+        })
+        reader.readAsDataURL(file)
+      }
+    } catch (err) {
+      console.error('Lesson attachment error:', err)
+      alert('Could not process attachment.')
+    } finally {
+      if (lessonFileInputRef.current) lessonFileInputRef.current.value = ''
+    }
   }
 
   const handleChatKeyboardInsert = (text) => {
@@ -1713,12 +1787,13 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
   }
 
   const sendChatMessage = async () => {
-    if ((!chatInput.trim() && !chatImage) || chatLoading) return
+    if ((!chatInput.trim() && !chatImage && !chatAttachment) || chatLoading) return
 
-    const userMessage = { role: 'user', content: chatInput, image: chatImage }
+    const userMessage = { role: 'user', content: chatInput, image: chatImage, attachment: chatAttachment }
     setChatMessages(prev => [...prev, userMessage])
     setChatInput('')
     setChatImage(null)
+    setChatAttachment(null)
     setChatLoading(true)
 
     try {
@@ -1755,6 +1830,15 @@ Problem: ${chatInput}`
       } else if (chatImage) {
         const imgPrompt = activeCourse ? `${chatInput}\n\nRespond in ${activeCourse.language || 'English'} language.` : chatInput
         response = await analyzeImage(chatImage, imgPrompt, 'General')
+      } else if (chatAttachment?.type === 'pdf') {
+        const pdfPrompt = `${chatInput || 'Summarize this PDF and explain key points.'}
+
+PDF NAME: ${chatAttachment.name}
+PDF CONTENT:
+${chatAttachment.text}
+
+Respond in ${activeCourse?.language || 'English'} language.`
+        response = await sendMessage([{ role: 'user', content: pdfPrompt }], activeCourse?.name || 'AI Tutor')
       } else {
         sourceRefs = getRelevantPdfPages(chatInput).slice(0, 3).map(p => ({
           source: p.source || 'PDF',
@@ -2656,7 +2740,7 @@ Problem: ${chatInput}`
           
           {/* LESSON STEP VIEW */}
           {view === 'lesson-step' && activeLesson && (
-            <div className="flex flex-col h-full max-w-3xl mx-auto">
+            <div className="flex flex-col h-full max-w-6xl mx-auto w-full">
               {/* Lesson Header */}
               <div className="p-3 md:p-4 border-b border-gray-800 bg-gray-900/50">
                 <div className="flex items-center justify-between">
@@ -2708,9 +2792,25 @@ Problem: ${chatInput}`
                       msg.role === 'user' ? 'bg-primary-600 rounded-2xl rounded-br-md' : 'bg-gray-800/80 rounded-2xl rounded-bl-md'
                     } px-5 py-4`}>
                       {msg.role === 'user' ? (
-                        <p className="text-gray-100">{msg.content}</p>
+                        <>
+                          {msg.attachment?.type === 'image' && msg.attachment?.data && (
+                            <img src={msg.attachment.data} alt={msg.attachment.name || 'Attachment'} className="max-h-40 rounded-lg mb-2" />
+                          )}
+                          {msg.attachment?.type === 'pdf' && (
+                            <div className="mb-2 text-xs text-primary-200 bg-primary-500/20 border border-primary-500/30 rounded-lg px-2 py-1 inline-flex items-center gap-1">
+                              <FileText className="h-3.5 w-3.5" />
+                              {msg.attachment.name || 'PDF attached'}
+                            </div>
+                          )}
+                          <p className="text-gray-100">{msg.content}</p>
+                        </>
                       ) : (
                         <MarkdownRenderer content={msg.content} />
+                      )}
+                      {msg.role === 'assistant' && msg.diagram && (
+                        <div className="mt-3">
+                          <InteractiveDiagram diagram={msg.diagram} />
+                        </div>
                       )}
                     </div>
                     {msg.role === 'user' && (
@@ -2767,6 +2867,18 @@ Problem: ${chatInput}`
                   </div>
                 )}
                 
+                {lessonAttachment && (
+                  <div className="mb-3">
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-primary-500/30 bg-primary-500/10 text-xs text-primary-200">
+                      {lessonAttachment.type === 'pdf' ? <FileText className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}
+                      <span>{lessonAttachment.name}</span>
+                      <button onClick={() => setLessonAttachment(null)} className="text-primary-100 hover:text-white">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-3">
                   <input
                     type="text"
@@ -2776,9 +2888,17 @@ Problem: ${chatInput}`
                     placeholder="Type your answer or ask a question..."
                     className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-primary-500"
                   />
+                  <input type="file" ref={lessonFileInputRef} onChange={handleLessonAttachmentUpload} accept="image/*,application/pdf" className="hidden" />
+                  <button
+                    onClick={() => lessonFileInputRef.current?.click()}
+                    className="bg-gray-800 hover:bg-gray-700 p-3 rounded-xl"
+                    title="Attach image or PDF"
+                  >
+                    <FileUp className="h-5 w-5" />
+                  </button>
                   <button 
                     onClick={handleStepResponse}
-                    disabled={!input.trim() || isLoading}
+                    disabled={(!input.trim() && !lessonAttachment) || isLoading}
                     className="bg-primary-600 hover:bg-primary-500 disabled:opacity-50 p-3 rounded-xl"
                   >
                     <Send className="h-5 w-5" />
@@ -3077,6 +3197,12 @@ Problem: ${chatInput}`
                       {msg.role === 'user' ? (
                         <div className="bg-primary-600 text-white rounded-2xl rounded-br-md px-4 py-3 shadow-lg shadow-primary-500/20">
                           {msg.image && <img src={msg.image} alt="Upload" className="max-h-40 rounded-lg mb-2" />}
+                          {msg.attachment?.type === 'pdf' && (
+                            <div className="mb-2 text-xs text-primary-100 bg-black/20 border border-white/20 rounded-lg px-2 py-1 inline-flex items-center gap-1">
+                              <FileText className="h-3.5 w-3.5" />
+                              {msg.attachment.name || 'PDF attached'}
+                            </div>
+                          )}
                           <p className="whitespace-pre-wrap">{msg.content}</p>
                         </div>
                       ) : (
@@ -3170,6 +3296,17 @@ Problem: ${chatInput}`
                     </div>
                   </div>
                 )}
+                {chatAttachment?.type === 'pdf' && (
+                  <div className="p-3 border-b border-gray-800">
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-primary-500/30 bg-primary-500/10 text-xs text-primary-200">
+                      <FileText className="h-3.5 w-3.5" />
+                      <span>{chatAttachment.name}</span>
+                      <button onClick={() => setChatAttachment(null)} className="text-primary-100 hover:text-white">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="p-3">
                   <div className="bg-gray-800 rounded-xl border border-gray-700 focus-within:border-primary-500 transition-colors">
@@ -3185,7 +3322,7 @@ Problem: ${chatInput}`
                     
                     <div className="flex items-center justify-between px-3 pb-3">
                       <div className="flex items-center gap-1">
-                        <input type="file" ref={chatFileInputRef} onChange={handleChatImageUpload} accept="image/*" className="hidden" />
+                        <input type="file" ref={chatFileInputRef} onChange={handleChatImageUpload} accept="image/*,application/pdf" className="hidden" />
                         <button onClick={() => chatFileInputRef.current?.click()}
                           className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg">
                           <Camera className="h-5 w-5" />
@@ -3197,7 +3334,7 @@ Problem: ${chatInput}`
                           </button>
                         )}
                       </div>
-                      <button onClick={sendChatMessage} disabled={(!chatInput.trim() && !chatImage) || chatLoading}
+                      <button onClick={sendChatMessage} disabled={(!chatInput.trim() && !chatImage && !chatAttachment) || chatLoading}
                         className="p-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white rounded-lg">
                         {chatLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
                       </button>
