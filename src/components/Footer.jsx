@@ -30,8 +30,8 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link to="/tutor" className="hover:text-primary-400 transition-colors">
-                  AI Tutor
+                <Link to="/exam-prep" className="hover:text-primary-400 transition-colors">
+                  Study Hub
                 </Link>
               </li>
               <li>
@@ -47,22 +47,22 @@ export default function Footer() {
             <h4 className="text-white font-semibold mb-4">Popular Subjects</h4>
             <ul className="space-y-2">
               <li>
-                <Link to="/tutor/math" className="hover:text-primary-400 transition-colors">
+                <Link to="/exam-prep" className="hover:text-primary-400 transition-colors">
                   Mathematics
                 </Link>
               </li>
               <li>
-                <Link to="/tutor/physics" className="hover:text-primary-400 transition-colors">
+                <Link to="/exam-prep" className="hover:text-primary-400 transition-colors">
                   Physics
                 </Link>
               </li>
               <li>
-                <Link to="/tutor/chemistry" className="hover:text-primary-400 transition-colors">
+                <Link to="/exam-prep" className="hover:text-primary-400 transition-colors">
                   Chemistry
                 </Link>
               </li>
               <li>
-                <Link to="/tutor/biology" className="hover:text-primary-400 transition-colors">
+                <Link to="/exam-prep" className="hover:text-primary-400 transition-colors">
                   Biology
                 </Link>
               </li>

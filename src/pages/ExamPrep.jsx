@@ -328,6 +328,26 @@ const formatOptionText = (option, index) => {
   return `${String.fromCharCode(65 + index)}) ${cleaned}`
 }
 
+const parseMathSolution = (content) => {
+  const direct = safeParseJSON(content, null)
+  if (direct && direct.steps) return direct
+
+  const stripped = String(content || '')
+    .replace(/```json/gi, '')
+    .replace(/```/g, '')
+    .trim()
+
+  const firstObj = stripped.indexOf('{')
+  const lastObj = stripped.lastIndexOf('}')
+  if (firstObj !== -1 && lastObj !== -1 && lastObj > firstObj) {
+    const extracted = stripped.substring(firstObj, lastObj + 1)
+    const parsed = safeParseJSON(extracted, null)
+    if (parsed && parsed.steps) return parsed
+  }
+
+  return null
+}
+
 export default function ExamPrep() {
   const { user, signOut } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(() => !isMobile())
@@ -1593,24 +1613,24 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
 
-  // Load chat history for active course (or global chat)
+  // Load chat history when course id changes (prevents rapid view glitches)
   useEffect(() => {
     const historyKey = activeCourse ? `course_${activeCourse.id}` : 'general'
     setChatMessages(chatHistoryByCourse[historyKey] || [])
-  }, [activeCourse, chatHistoryByCourse])
+  }, [activeCourse?.id])
 
   // Persist latest chat messages into history map
   useEffect(() => {
     const historyKey = activeCourse ? `course_${activeCourse.id}` : 'general'
     setChatHistoryByCourse(prev => {
       const previous = prev[historyKey] || []
-      if (JSON.stringify(previous) === JSON.stringify(chatMessages)) return prev
+      if (previous === chatMessages) return prev
       return {
         ...prev,
         [historyKey]: chatMessages.slice(-100)
       }
     })
-  }, [chatMessages, activeCourse])
+  }, [chatMessages, activeCourse?.id])
 
   const getRelevantPdfPages = (query) => {
     if (!activeCourse) return []
@@ -1711,7 +1731,7 @@ Problem: ${chatInput}`
         }
 
         // Try to parse as JSON solution
-        const parsed = safeParseJSON(response.content, null)
+        const parsed = parseMathSolution(response.content)
         if (parsed && parsed.steps) {
           parsedSolution = parsed
         }

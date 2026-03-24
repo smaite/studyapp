@@ -98,10 +98,10 @@ const products = [
   },
   {
     title: 'AI Tutor & Math Solver',
-    description: 'Chat with AI for any subject, or solve math problems step-by-step with the math keyboard.',
+    description: 'Available inside Study Hub for focused exam prep sessions with full context memory.',
     icon: MessageSquare,
     color: 'from-purple-500 to-purple-600',
-    link: '/tutor'
+    link: '/exam-prep'
   }
 ]
 
@@ -178,7 +178,7 @@ export default function Landing() {
             {subjects.map((subject, index) => (
               <Link
                 key={index}
-                to={`/tutor/${subject.name.toLowerCase().replace(' ', '-')}`}
+                to="/exam-prep"
                 className={`${subject.bg} rounded-3xl p-6 text-center group hover:scale-105 transition-all duration-300 border border-gray-100 hover:shadow-xl`}
               >
                 <div className="text-5xl mb-4 group-hover:scale-110 transition-transform">{subject.icon}</div>
@@ -348,7 +348,7 @@ export default function Landing() {
               Start learning smarter today. No credit card required.
             </p>
             <Link 
-              to="/tutor" 
+              to="/exam-prep" 
               className="inline-flex items-center gap-2 bg-white text-primary-600 font-bold py-4 px-8 rounded-2xl hover:bg-gray-100 transition-all shadow-xl hover:shadow-2xl hover:-translate-y-0.5 text-lg"
             >
               Get Started Free

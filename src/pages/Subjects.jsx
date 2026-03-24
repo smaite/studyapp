@@ -124,7 +124,7 @@ export default function Subjects() {
           {subjects.map((subject) => (
             <Link
               key={subject.id}
-              to={`/tutor/${subject.id}`}
+              to="/exam-prep"
               className="card group hover:scale-[1.02] transition-all duration-300"
             >
               <div className="flex items-start gap-4">
@@ -160,7 +160,7 @@ export default function Subjects() {
 
           {/* Create Custom Subject Card */}
           <Link
-            to="/tutor"
+            to="/exam-prep"
             className="card group border-2 border-dashed border-gray-300 hover:border-primary-400 bg-gray-50 hover:bg-primary-50 transition-all"
           >
             <div className="flex flex-col items-center justify-center h-full py-4 text-center">
