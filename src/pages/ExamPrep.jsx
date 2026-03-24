@@ -37,11 +37,23 @@ const subjectStyles = {
 // Check if mobile
 const isMobile = () => window.innerWidth < 768
 
-// Robust JSON parser - handles malformed AI responses
+// Robust JSON parser - handles large/malformed AI responses
 const safeParseJSON = (text, fallback = []) => {
+  if (!text || typeof text !== 'string') return fallback
+  
+  // First, try direct parse (fastest path)
+  try {
+    return JSON.parse(text)
+  } catch (e) {
+    // Continue with cleaning
+  }
+  
   try {
     // Remove code block markers
-    let json = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+    let json = text
+      .replace(/```json\s*/gi, '')
+      .replace(/```\s*/g, '')
+      .trim()
     
     // Find JSON array or object boundaries
     const arrayStart = json.indexOf('[')
@@ -49,26 +61,120 @@ const safeParseJSON = (text, fallback = []) => {
     const objStart = json.indexOf('{')
     const objEnd = json.lastIndexOf('}')
     
-    // Determine if it's an array or object
+    // Determine if it's an array or object and extract it
     if (arrayStart !== -1 && arrayEnd !== -1 && (arrayStart < objStart || objStart === -1)) {
       json = json.substring(arrayStart, arrayEnd + 1)
     } else if (objStart !== -1 && objEnd !== -1) {
       json = json.substring(objStart, objEnd + 1)
     }
     
-    // Fix common JSON issues
-    json = json
-      .replace(/,\s*([}\]])/g, '$1') // Remove trailing commas
-      .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3') // Quote unquoted keys
-      .replace(/:\s*'([^']*)'/g, ': "$1"') // Convert single quotes to double
-      .replace(/\n/g, ' ') // Remove newlines inside strings
-      .replace(/\t/g, ' ') // Remove tabs
-      .replace(/\\n/g, '\\\\n') // Escape newlines in strings
+    // Try parsing the extracted JSON first (might work for large clean JSON)
+    try {
+      return JSON.parse(json)
+    } catch (e) {
+      // Continue with cleaning
+    }
     
-    return JSON.parse(json)
+    // Fix common issues that break JSON parsing
+    // 1. Handle unescaped newlines inside string values (most common issue)
+    let cleaned = ''
+    let inString = false
+    let escaped = false
+    
+    for (let i = 0; i < json.length; i++) {
+      const char = json[i]
+      
+      if (escaped) {
+        cleaned += char
+        escaped = false
+        continue
+      }
+      
+      if (char === '\\') {
+        escaped = true
+        cleaned += char
+        continue
+      }
+      
+      if (char === '"') {
+        inString = !inString
+        cleaned += char
+        continue
+      }
+      
+      if (inString) {
+        // Replace problematic characters inside strings
+        if (char === '\n') {
+          cleaned += '\\n'
+        } else if (char === '\r') {
+          cleaned += '\\r'
+        } else if (char === '\t') {
+          cleaned += '\\t'
+        } else {
+          cleaned += char
+        }
+      } else {
+        // Outside strings, we can safely remove extra whitespace
+        if (char === '\n' || char === '\r' || char === '\t') {
+          cleaned += ' '
+        } else {
+          cleaned += char
+        }
+      }
+    }
+    
+    // Remove trailing commas before } or ]
+    cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1')
+    
+    try {
+      return JSON.parse(cleaned)
+    } catch (e) {
+      // Last resort: extract individual objects from array
+      if (cleaned.startsWith('[')) {
+        const objects = []
+        let depth = 0
+        let start = -1
+        let inStr = false
+        let esc = false
+        
+        for (let i = 0; i < cleaned.length; i++) {
+          const char = cleaned[i]
+          
+          if (esc) { esc = false; continue }
+          if (char === '\\') { esc = true; continue }
+          if (char === '"') { inStr = !inStr; continue }
+          if (inStr) continue
+          
+          if (char === '{') {
+            if (depth === 0) start = i
+            depth++
+          } else if (char === '}') {
+            depth--
+            if (depth === 0 && start !== -1) {
+              try {
+                const objStr = cleaned.substring(start, i + 1)
+                const obj = JSON.parse(objStr)
+                objects.push(obj)
+              } catch (e2) {
+                // Skip this object, try next
+              }
+              start = -1
+            }
+          }
+        }
+        
+        if (objects.length > 0) {
+          console.log(`Recovered ${objects.length} objects from malformed JSON array`)
+          return objects
+        }
+      }
+      
+      console.error('JSON Parse Error:', e.message)
+      console.log('Failed JSON (first 1000 chars):', text?.substring(0, 1000))
+      return fallback
+    }
   } catch (error) {
     console.error('JSON Parse Error:', error.message)
-    console.log('Attempted to parse:', text?.substring(0, 500))
     return fallback
   }
 }
