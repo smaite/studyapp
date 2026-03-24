@@ -1758,7 +1758,7 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
       const header = isExactPageQuery ? 'COURSE PAGE CONTEXT (use this to answer accurately):' : 'RELEVANT COURSE CONTEXT:'
       return `\n\n${header}\n${relevantPages.map(p => `Source: ${p.source || 'PDF'} | Page ${p.page}\n${p.text?.substring(0, isExactPageQuery ? 4000 : 2500) || ''}`).join('\n\n---\n\n')}`
     }
-    return activeCourse.content
+    return activeCourse?.content
       ? `\n\nCOURSE CONTEXT:\n${activeCourse.content.substring(0, 12000)}`
       : ''
   }
