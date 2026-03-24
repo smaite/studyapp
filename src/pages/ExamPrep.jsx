@@ -1835,7 +1835,7 @@ Problem: ${chatInput}`
         }
 
         // Try to parse as JSON solution
-        const parsed = parseMathSolution(response.content)
+        const parsed = parseMathSolution(response?.content || '')
         if (parsed && parsed.steps) {
           parsedSolution = parsed
         }
@@ -1868,9 +1868,14 @@ Respond in ${activeCourse?.language || 'English'} language.`
         response = await sendMessage(apiMsgs, 'AI Tutor')
       }
 
+      const assistantText = parsedSolution?.fullExplanation || response?.content || response?.text || ''
+      if (!assistantText) {
+        throw new Error('Empty AI response from proxy')
+      }
+
       setChatMessages(prev => [...prev, {
         role: 'assistant',
-        content: parsedSolution?.fullExplanation || response.content,
+        content: assistantText,
         solution: parsedSolution,
         sourceRefs,
         diagram: inferDiagramRequest(chatInput)
