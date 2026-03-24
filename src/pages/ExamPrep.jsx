@@ -436,12 +436,7 @@ Return ONLY valid JSON.`
 
       const response = await sendMessage([{ role: 'user', content: updatePrompt }], activeCourse.name)
       
-      let json = response.content.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
-      const start = json.indexOf('{'), end = json.lastIndexOf('}')
-      if (start !== -1 && end !== -1) json = json.substring(start, end + 1)
-      json = json.replace(/,(\s*[\]}])/g, '$1')
-      
-      const updates = JSON.parse(json)
+      const updates = safeParseJSON(response.content, { newLessons: [], updatedLessons: [] })
       
       // Update the course
       const updatedCourse = { ...activeCourse, content: combinedContent }
@@ -521,14 +516,7 @@ Return ONLY valid JSON array (no other text):
 
       const response = await sendMessage([{ role: 'user', content: prompt }], course.name)
       
-      let json = response.content.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
-      const start = json.indexOf('['), end = json.lastIndexOf(']')
-      if (start !== -1 && end !== -1) json = json.substring(start, end + 1)
-      
-      // Clean up JSON
-      json = json.replace(/,(\s*[\]}])/g, '$1')
-      
-      const parsed = JSON.parse(json)
+      const parsed = safeParseJSON(response.content, [])
       if (!parsed || parsed.length === 0) throw new Error('No questions generated')
       
       setQuestions(parsed.slice(0, 10).map(q => ({
@@ -735,12 +723,9 @@ Be friendly and make it engaging!`
 
       const response = await sendMessage([{ role: 'user', content: prompt }], activeCourse.name)
       
-      let json = response.content.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
-      const start = json.indexOf('['), end = json.lastIndexOf(']')
-      if (start !== -1 && end !== -1) json = json.substring(start, end + 1)
-      json = json.replace(/,(\s*[\]}])/g, '$1')
+      const steps = safeParseJSON(response.content, [])
+      if (steps.length === 0) throw new Error('No steps generated')
       
-      const steps = JSON.parse(json)
       setLessonContent(steps)
       
       // Show first step
@@ -839,12 +824,10 @@ Return ONLY valid JSON array:
 
       const response = await sendMessage([{ role: 'user', content: prompt }], activeCourse.name)
       
-      let json = response.content.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
-      const start = json.indexOf('['), end = json.lastIndexOf(']')
-      if (start !== -1 && end !== -1) json = json.substring(start, end + 1)
-      json = json.replace(/,(\s*[\]}])/g, '$1')
+      const parsed = safeParseJSON(response.content, [])
+      if (parsed.length === 0) throw new Error('No questions generated')
       
-      setQuestions(JSON.parse(json).slice(0, 5))
+      setQuestions(parsed.slice(0, 5))
     } catch (error) {
       console.error('Quiz error:', error)
       setQuestions([{ question: 'Error generating questions. Try again?', options: ['Retry', 'Go back', 'Skip', 'Help'], correct: 0, explanation: '' }])
@@ -982,13 +965,10 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
 
       const response = await sendMessage([{ role: 'user', content: lessonsPrompt }], activeCourse.name)
       
-      let lessonsJson = response.content.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
-      const startIdx = lessonsJson.indexOf('[')
-      const endIdx = lessonsJson.lastIndexOf(']')
-      if (startIdx !== -1 && endIdx !== -1) lessonsJson = lessonsJson.substring(startIdx, endIdx + 1)
-      lessonsJson = lessonsJson.replace(/,(\s*[\]}])/g, '$1')
+      const parsedLessons = safeParseJSON(response.content, [])
+      if (parsedLessons.length === 0) throw new Error('Failed to regenerate lessons')
       
-      const lessons = JSON.parse(lessonsJson).map((l, idx) => ({
+      const lessons = parsedLessons.map((l, idx) => ({
         ...l, 
         id: idx + 1, 
         progress: 0, 
@@ -1205,15 +1185,11 @@ Problem: ${chatInput}`
           response = await sendMessage([{ role: 'user', content: mathPrompt }], 'Mathematics')
         }
 
-        try {
-          let jsonStr = response.content
-          const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
-          if (jsonMatch) jsonStr = jsonMatch[1]
-          const start = jsonStr.indexOf('{'), end = jsonStr.lastIndexOf('}')
-          if (start !== -1 && end !== -1) {
-            parsedSolution = JSON.parse(jsonStr.substring(start, end + 1))
-          }
-        } catch (e) { /* not JSON */ }
+        // Try to parse as JSON solution
+        const parsed = safeParseJSON(response.content, null)
+        if (parsed && parsed.steps) {
+          parsedSolution = parsed
+        }
       } else if (chatImage) {
         const imgPrompt = activeCourse ? `${chatInput}\n\nRespond in ${activeCourse.language || 'English'} language.` : chatInput
         response = await analyzeImage(chatImage, imgPrompt, 'General')
