@@ -310,6 +310,16 @@ const cleanEscapedText = (value = '') => {
   return String(value)
     .replace(/\\([{}])/g, '$1')
     .replace(/\\,/g, ',')
+    .replace(/\\in/g, '∈')
+    .replace(/\\le/g, '≤')
+    .replace(/\\ge/g, '≥')
+    .replace(/\\neq/g, '≠')
+    .replace(/\\times/g, '×')
+    .replace(/\\cdot/g, '·')
+    .replace(/\\mathbb\{Z\}/g, 'ℤ')
+    .replace(/\\mathbb\{N\}/g, 'ℕ')
+    .replace(/\\mathbb\{R\}/g, 'ℝ')
+    .replace(/\\text\{([^}]*)\}/g, '$1')
     .trim()
 }
 
