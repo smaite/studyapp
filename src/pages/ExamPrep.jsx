@@ -1583,62 +1583,66 @@ Problem: ${chatInput}`
         </div>
       </header>
       
-      {/* Desktop Sidebar */}
-      <div className={`hidden md:flex ${sidebarOpen ? 'w-64' : 'w-16'} bg-surface-800 border-r border-white/5 flex-col transition-all duration-300`}>
+      {/* Desktop Sidebar - Gaming Style */}
+      <div className={`hidden md:flex ${sidebarOpen ? 'w-64' : 'w-16'} bg-gradient-to-b from-surface-800/95 to-surface-900/95 backdrop-blur-xl border-r border-primary-500/10 flex-col transition-all duration-300 relative z-20`}>
+        {/* Animated border glow */}
+        <div className="absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-primary-500/30 to-transparent" />
+        
         {/* Logo */}
         <div className="p-4 flex items-center gap-3">
-          <div className="bg-gradient-to-br from-primary-500 to-primary-600 p-2 rounded-xl shadow-lg shadow-primary-500/20">
+          <div className="relative bg-gradient-to-br from-primary-500 to-secondary-500 p-2.5 rounded-xl shadow-glow animate-pulse-slow">
             <GraduationCap className="h-6 w-6" />
+            <div className="absolute inset-0 rounded-xl border border-white/20" />
           </div>
-          {sidebarOpen && <span className="font-bold text-lg">StudyAI</span>}
+          {sidebarOpen && <span className="font-bold text-lg font-display bg-gradient-to-r from-primary-400 to-accent-400 bg-clip-text text-transparent">StudyAI</span>}
         </div>
         
         {/* Nav */}
         <nav className="flex-1 px-2 py-4 space-y-1">
           <button
             onClick={() => { setView('home'); setActiveCourse(null) }}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer ${
-              view === 'home' && !activeCourse ? 'bg-primary-500/15 text-primary-400 border border-primary-500/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer group ${
+              view === 'home' && !activeCourse ? 'bg-gradient-to-r from-primary-500/20 to-secondary-500/10 text-primary-400 border border-primary-500/30 shadow-glow-sm' : 'text-gray-400 hover:bg-primary-500/10 hover:text-white border border-transparent hover:border-primary-500/20'
             }`}
           >
-            <Home className="h-5 w-5 shrink-0" />
+            <Home className={`h-5 w-5 shrink-0 ${view === 'home' && !activeCourse ? '' : 'group-hover:text-primary-400'}`} />
             {sidebarOpen && <span>Dashboard</span>}
           </button>
           
           <button
             onClick={() => setView('public')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer ${
-              view === 'public' ? 'bg-primary-500/15 text-primary-400 border border-primary-500/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer group ${
+              view === 'public' ? 'bg-gradient-to-r from-primary-500/20 to-secondary-500/10 text-primary-400 border border-primary-500/30 shadow-glow-sm' : 'text-gray-400 hover:bg-primary-500/10 hover:text-white border border-transparent hover:border-primary-500/20'
             }`}
           >
-            <Users className="h-5 w-5 shrink-0" />
+            <Users className={`h-5 w-5 shrink-0 ${view === 'public' ? '' : 'group-hover:text-primary-400'}`} />
             {sidebarOpen && <span>Public Library</span>}
           </button>
           
           <button
             onClick={() => setView('chat')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer ${
-              view === 'chat' ? 'bg-primary-500/15 text-primary-400 border border-primary-500/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all cursor-pointer group ${
+              view === 'chat' ? 'bg-gradient-to-r from-primary-500/20 to-secondary-500/10 text-primary-400 border border-primary-500/30 shadow-glow-sm' : 'text-gray-400 hover:bg-primary-500/10 hover:text-white border border-transparent hover:border-primary-500/20'
             }`}
           >
-            <Bot className="h-5 w-5 shrink-0" />
+            <Bot className={`h-5 w-5 shrink-0 ${view === 'chat' ? '' : 'group-hover:text-primary-400'}`} />
             {sidebarOpen && <span>AI Tutor</span>}
           </button>
           
           {sidebarOpen && courses.length > 0 && (
             <div className="pt-4">
-              <p className="px-3 text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Your Courses</p>
+              <p className="px-3 text-xs font-medium text-primary-400/70 uppercase tracking-wider mb-2">Your Quests</p>
               {courses.slice(0, 5).map(course => {
                 const style = getSubjectStyle(course.name)
                 return (
                   <button
                     key={course.id}
                     onClick={() => { setActiveCourse(course); setView('course') }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left cursor-pointer ${
-                      activeCourse?.id === course.id ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left cursor-pointer group ${
+                      activeCourse?.id === course.id ? 'bg-primary-500/15 text-white border border-primary-500/20' : 'text-gray-400 hover:bg-primary-500/10 hover:text-white border border-transparent hover:border-primary-500/10'
                     }`}
                   >
-                    <span className="text-lg">{style.icon}</span>
+                    <span className="text-lg group-hover:scale-110 transition-transform">{style.icon}</span>
                     <span className="truncate text-sm">{course.name}</span>
                   </button>
                 )
@@ -1647,20 +1651,20 @@ Problem: ${chatInput}`
           )}
         </nav>
         
-        {/* User */}
-        <div className="p-3 border-t border-white/5">
+        {/* User - Gaming Profile Card */}
+        <div className="p-3 border-t border-primary-500/10">
           {sidebarOpen ? (
-            <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors cursor-pointer">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center font-bold text-sm shadow-lg shadow-primary-500/20">
+            <div className="flex items-center gap-3 p-2 rounded-xl bg-surface-700/50 border border-primary-500/10 hover:border-primary-500/30 transition-all cursor-pointer group">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center font-bold text-sm shadow-glow group-hover:shadow-glow-lg transition-all">
                 {user?.email?.[0].toUpperCase() || 'U'}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.user_metadata?.full_name || 'Student'}</p>
-                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                <p className="text-sm font-medium truncate">{user?.user_metadata?.full_name || 'Player'}</p>
+                <p className="text-xs text-primary-400/60 truncate">{userProgress.xp} XP</p>
               </div>
             </div>
           ) : (
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center font-bold text-sm mx-auto shadow-lg shadow-primary-500/20 cursor-pointer">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center font-bold text-sm mx-auto shadow-glow cursor-pointer hover:shadow-glow-lg transition-all">
               {user?.email?.[0].toUpperCase() || 'U'}
             </div>
           )}
@@ -1668,11 +1672,11 @@ Problem: ${chatInput}`
       </div>
       
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Desktop Top Bar */}
-        <header className="hidden md:flex bg-surface-800/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 items-center justify-between">
+      <div className="flex-1 flex flex-col overflow-hidden relative z-10">
+        {/* Desktop Top Bar - Gaming Style */}
+        <header className="hidden md:flex bg-surface-800/60 backdrop-blur-xl border-b border-primary-500/10 px-6 py-4 items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-white/5 rounded-xl transition-colors cursor-pointer">
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-primary-500/10 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-primary-500/20">
               <Menu className="h-5 w-5 text-gray-400" />
             </button>
             
@@ -1728,129 +1732,173 @@ Problem: ${chatInput}`
         </header>
         
         {/* Content Area */}
-        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+        <main className="flex-1 overflow-y-auto pb-20 md:pb-0 relative z-10">
           {/* HOME - Dashboard */}
           {view === 'home' && (
             <div className="p-4 md:p-6 max-w-6xl mx-auto">
-              {/* XP & Progress Card */}
-              <div className="bg-gradient-to-br from-surface-800 to-surface-900 rounded-2xl p-4 md:p-6 border border-white/5 mb-6">
-                <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
-                  {/* Rank & XP */}
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className={`w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br ${getRank(userProgress.xp).color} flex items-center justify-center text-3xl md:text-4xl shadow-lg`}>
+              {/* Hero XP Card - Gaming Style */}
+              <div className="game-card p-6 md:p-8 mb-6 relative overflow-hidden">
+                {/* Animated background gradient */}
+                <div className="absolute inset-0 bg-gradient-to-br from-primary-600/20 via-transparent to-accent-500/10 pointer-events-none" />
+                <div className="absolute top-0 right-0 w-64 h-64 bg-primary-500/10 rounded-full blur-3xl pointer-events-none" />
+                
+                <div className="relative flex flex-col md:flex-row md:items-center gap-6">
+                  {/* Rank Badge - Neon Style */}
+                  <div className="flex items-center gap-5 flex-1">
+                    <div className={`relative w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-gradient-to-br ${getRank(userProgress.xp).color} flex items-center justify-center text-4xl md:text-5xl animate-pulse-glow`}>
                       {getRank(userProgress.xp).icon}
+                      <div className="absolute inset-0 rounded-2xl border-2 border-white/20" />
                     </div>
                     <div>
-                      <p className="text-gray-400 text-sm">Your Rank</p>
-                      <h2 className="text-xl md:text-2xl font-bold">{getRank(userProgress.xp).name}</h2>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Zap className="h-4 w-4 text-amber-400" />
-                        <span className="text-amber-400 font-semibold">{userProgress.xp} XP</span>
+                      <p className="text-gray-400 text-sm font-medium uppercase tracking-wider">Your Rank</p>
+                      <h2 className="text-2xl md:text-3xl font-bold font-display bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                        {getRank(userProgress.xp).name}
+                      </h2>
+                      <div className="flex items-center gap-3 mt-2">
+                        <div className="flex items-center gap-1.5 bg-amber-500/20 px-3 py-1 rounded-lg border border-amber-500/30">
+                          <Zap className="h-4 w-4 text-amber-400" />
+                          <span className="text-amber-400 font-bold">{userProgress.xp} XP</span>
+                        </div>
                         {getNextRank(userProgress.xp) && (
-                          <span className="text-gray-500 text-sm">/ {getNextRank(userProgress.xp).minXP} to {getNextRank(userProgress.xp).name}</span>
+                          <span className="text-gray-500 text-sm">→ {getNextRank(userProgress.xp).minXP} for {getNextRank(userProgress.xp).name}</span>
                         )}
                       </div>
                     </div>
                   </div>
                   
-                  {/* Stats */}
-                  <div className="flex gap-4 md:gap-6">
-                    <div className="bg-white/5 rounded-xl px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-1.5 text-orange-400 mb-1">
+                  {/* Stats Grid - Neon Cards */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-gradient-to-br from-orange-500/20 to-red-500/10 rounded-xl px-4 py-3 text-center border border-orange-500/20 hover:border-orange-500/40 transition-all cursor-default group">
+                      <div className="flex items-center justify-center gap-1.5 text-orange-400 mb-1 group-hover:scale-110 transition-transform">
                         <Flame className="h-5 w-5" />
-                        <span className="text-xl font-bold">{userProgress.streak}</span>
+                        <span className="text-2xl font-bold">{userProgress.streak}</span>
                       </div>
-                      <p className="text-xs text-gray-500">Day Streak</p>
+                      <p className="text-xs text-orange-300/70 font-medium">Day Streak</p>
                     </div>
-                    <div className="bg-white/5 rounded-xl px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-1.5 text-green-400 mb-1">
+                    <div className="bg-gradient-to-br from-green-500/20 to-emerald-500/10 rounded-xl px-4 py-3 text-center border border-green-500/20 hover:border-green-500/40 transition-all cursor-default group">
+                      <div className="flex items-center justify-center gap-1.5 text-green-400 mb-1 group-hover:scale-110 transition-transform">
                         <Target className="h-5 w-5" />
-                        <span className="text-xl font-bold">{userProgress.totalAnswered > 0 ? Math.round((userProgress.totalCorrect / userProgress.totalAnswered) * 100) : 0}%</span>
+                        <span className="text-2xl font-bold">{userProgress.totalAnswered > 0 ? Math.round((userProgress.totalCorrect / userProgress.totalAnswered) * 100) : 0}%</span>
                       </div>
-                      <p className="text-xs text-gray-500">Accuracy</p>
+                      <p className="text-xs text-green-300/70 font-medium">Accuracy</p>
                     </div>
-                    <div className="bg-white/5 rounded-xl px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-1.5 text-purple-400 mb-1">
+                    <div className="bg-gradient-to-br from-purple-500/20 to-pink-500/10 rounded-xl px-4 py-3 text-center border border-purple-500/20 hover:border-purple-500/40 transition-all cursor-default group">
+                      <div className="flex items-center justify-center gap-1.5 text-purple-400 mb-1 group-hover:scale-110 transition-transform">
                         <Trophy className="h-5 w-5" />
-                        <span className="text-xl font-bold">{userProgress.challengesWon}</span>
+                        <span className="text-2xl font-bold">{userProgress.challengesWon}</span>
                       </div>
-                      <p className="text-xs text-gray-500">Challenges</p>
+                      <p className="text-xs text-purple-300/70 font-medium">Victories</p>
                     </div>
                   </div>
                 </div>
                 
-                {/* XP Progress Bar */}
+                {/* XP Progress Bar - Neon Style */}
                 {getNextRank(userProgress.xp) && (
-                  <div className="mt-4">
-                    <div className="bg-surface-700 rounded-full h-2 overflow-hidden">
+                  <div className="mt-6 relative">
+                    <div className="bg-surface-700/50 rounded-full h-3 overflow-hidden border border-primary-500/20">
                       <div 
-                        className={`h-full rounded-full bg-gradient-to-r ${getRank(userProgress.xp).color} transition-all duration-500`}
+                        className={`h-full rounded-full bg-gradient-to-r ${getRank(userProgress.xp).color} transition-all duration-500 relative`}
                         style={{ width: `${Math.min(100, ((userProgress.xp - getRank(userProgress.xp).minXP) / (getNextRank(userProgress.xp).minXP - getRank(userProgress.xp).minXP)) * 100)}%` }}
-                      />
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+                      </div>
+                    </div>
+                    <div className="flex justify-between mt-2 text-xs text-gray-500">
+                      <span>{getRank(userProgress.xp).name}</span>
+                      <span>{getNextRank(userProgress.xp).name}</span>
                     </div>
                   </div>
                 )}
               </div>
               
-              {/* Topics to Practice (Weak Areas) */}
+              {/* Challenge Mode Cards - Bento Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <button 
+                  onClick={() => { setChallengeMode('timed'); setChallengeTimer(60); }}
+                  className="game-card p-5 text-left group cursor-pointer relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl group-hover:bg-cyan-500/20 transition-all" />
+                  <div className="relative">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-glow-cyan">
+                      <Timer className="h-6 w-6 text-white" />
+                    </div>
+                    <h3 className="font-bold text-lg mb-1">Speed Run</h3>
+                    <p className="text-sm text-gray-400">60 second challenge</p>
+                    <div className="mt-3 flex items-center gap-2 text-cyan-400 text-sm font-medium">
+                      <span>+100 XP</span>
+                      <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </button>
+                
+                <button 
+                  onClick={() => { setChallengeMode('survival'); setChallengeLives(3); }}
+                  className="game-card p-5 text-left group cursor-pointer relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-2xl group-hover:bg-red-500/20 transition-all" />
+                  <div className="relative">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-pink-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-glow-pink">
+                      <Heart className="h-6 w-6 text-white" />
+                    </div>
+                    <h3 className="font-bold text-lg mb-1">Survival Mode</h3>
+                    <p className="text-sm text-gray-400">3 lives, no mistakes</p>
+                    <div className="mt-3 flex items-center gap-2 text-red-400 text-sm font-medium">
+                      <span>+150 XP</span>
+                      <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </button>
+                
+                <button 
+                  onClick={() => setChallengeMode('boss')}
+                  className="game-card p-5 text-left group cursor-pointer relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl group-hover:bg-purple-500/20 transition-all" />
+                  <div className="relative">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-glow">
+                      <Swords className="h-6 w-6 text-white" />
+                    </div>
+                    <h3 className="font-bold text-lg mb-1">Boss Fight</h3>
+                    <p className="text-sm text-gray-400">Hard mode unlocked</p>
+                    <div className="mt-3 flex items-center gap-2 text-purple-400 text-sm font-medium">
+                      <span>+200 XP</span>
+                      <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </button>
+              </div>
+              
+              {/* Focus Areas - Neon Warning */}
               {getWeakTopics().length > 0 && (
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 mb-6">
-                  <h3 className="font-medium text-amber-400 flex items-center gap-2 mb-3">
+                <div className="game-card p-5 mb-6 border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-orange-500/5">
+                  <h3 className="font-bold text-amber-400 flex items-center gap-2 mb-3">
                     <TrendingUp className="h-5 w-5" />
-                    Focus Areas - Let's improve these!
+                    Level Up These Skills
                   </h3>
                   <div className="flex flex-wrap gap-2">
                     {getWeakTopics().slice(0, 5).map(({ topic, accuracy }) => (
-                      <span key={topic} className="bg-amber-500/20 text-amber-300 px-3 py-1.5 rounded-lg text-sm">
-                        {topic} ({accuracy}%)
+                      <span key={topic} className="gaming-badge bg-amber-500/20 text-amber-300 border-amber-500/30">
+                        {topic} <span className="opacity-70">({accuracy}%)</span>
                       </span>
                     ))}
                   </div>
                 </div>
               )}
               
-              {/* Challenge Mode Quick Start */}
-              <div className="grid grid-cols-3 gap-3 mb-6">
-                <button 
-                  onClick={() => { setChallengeMode('timed'); setChallengeTimer(60); }}
-                  className="bg-surface-800/60 hover:bg-surface-700/60 border border-white/5 hover:border-primary-500/30 rounded-xl p-4 text-center transition-all cursor-pointer group"
-                >
-                  <Timer className="h-6 w-6 text-blue-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                  <p className="font-medium text-sm">Speed Run</p>
-                  <p className="text-xs text-gray-500">60s timer</p>
-                </button>
-                <button 
-                  onClick={() => { setChallengeMode('survival'); setChallengeLives(3); }}
-                  className="bg-surface-800/60 hover:bg-surface-700/60 border border-white/5 hover:border-red-500/30 rounded-xl p-4 text-center transition-all cursor-pointer group"
-                >
-                  <Heart className="h-6 w-6 text-red-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                  <p className="font-medium text-sm">Survival</p>
-                  <p className="text-xs text-gray-500">3 lives</p>
-                </button>
-                <button 
-                  onClick={() => setChallengeMode('boss')}
-                  className="bg-surface-800/60 hover:bg-surface-700/60 border border-white/5 hover:border-purple-500/30 rounded-xl p-4 text-center transition-all cursor-pointer group"
-                >
-                  <Swords className="h-6 w-6 text-purple-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                  <p className="font-medium text-sm">Boss Fight</p>
-                  <p className="text-xs text-gray-500">Hard mode</p>
-                </button>
-              </div>
-              
-              {/* Search & Filter - Mobile optimized */}
+              {/* Search & Filter - Gaming Style */}
               <div className="flex flex-col md:flex-row gap-3 md:gap-4 mb-6 md:mb-8">
                 <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-primary-400" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search courses..."
-                    className="w-full bg-surface-800/80 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                    placeholder="Search your quests..."
+                    className="w-full bg-surface-800/60 backdrop-blur-sm border border-primary-500/20 rounded-xl pl-12 pr-4 py-3.5 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 transition-all"
                   />
                 </div>
                 
-                {/* Horizontal scroll on mobile */}
+                {/* Category Pills */}
                 <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">
                   {['Math', 'Physics', 'Chemistry', 'CS'].map((cat, i) => {
                     const fullCat = ['Math', 'Physics', 'Chemistry', 'Computer Science'][i]
@@ -1860,8 +1908,8 @@ Problem: ${chatInput}`
                         onClick={() => setSelectedCategory(selectedCategory === fullCat ? 'all' : fullCat)}
                         className={`flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-sm transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                           selectedCategory === fullCat 
-                            ? 'bg-primary-500/15 text-primary-400 border border-primary-500/30' 
-                            : 'bg-surface-800/60 text-gray-400 hover:bg-white/5 border border-transparent'
+                            ? 'bg-gradient-to-r from-primary-500/20 to-secondary-500/20 text-primary-300 border border-primary-500/40 shadow-glow-sm' 
+                            : 'bg-surface-800/60 text-gray-400 hover:bg-primary-500/10 border border-primary-500/10 hover:border-primary-500/30'
                         }`}
                       >
                         <span>{subjectStyles[fullCat]?.icon}</span>
@@ -1872,39 +1920,47 @@ Problem: ${chatInput}`
                 </div>
               </div>
               
-              {/* Upcoming Exams */}
+              {/* Upcoming Exams - Gaming Card Style */}
               {courses.some(c => c.examDate) && (
                 <section className="mb-6 md:mb-8">
-                  <h2 className="text-lg font-semibold mb-3 md:mb-4 flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-amber-400" />
-                    Upcoming Exams
+                  <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                      <Clock className="h-5 w-5 text-amber-400" />
+                    </div>
+                    <span className="bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent">Upcoming Quests</span>
                   </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {courses.filter(c => c.examDate && daysUntil(c.examDate) > 0).sort((a, b) => new Date(a.examDate) - new Date(b.examDate)).slice(0, 3).map(course => {
                       const style = getSubjectStyle(course.name)
                       const days = daysUntil(course.examDate)
+                      const urgent = days <= 7
                       return (
                         <div
                           key={course.id}
                           onClick={() => { setActiveCourse(course); setView('course') }}
-                          className="bg-surface-800/60 border border-white/5 rounded-2xl p-5 cursor-pointer hover:bg-surface-700/60 hover:border-white/10 transition-all group"
+                          className={`game-card p-5 cursor-pointer group ${urgent ? 'border-amber-500/40' : ''}`}
                         >
                           <div className="flex items-start justify-between mb-4">
-                            <span className="bg-white/5 px-3 py-1 rounded-full text-sm text-gray-300">{course.name.split(' ')[0]}</span>
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${style.color} text-xl`}>
+                            <span className="gaming-badge text-xs">{course.name.split(' ')[0]}</span>
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br ${style.color} text-2xl shadow-lg group-hover:scale-110 transition-transform`}>
                               {style.icon}
                             </div>
                           </div>
-                          <h3 className="font-semibold text-lg mb-1 group-hover:text-primary-400 transition-colors">{course.name}</h3>
-                          <p className="text-sm text-gray-500 mb-4 truncate">{course.lessons.length} lessons</p>
-                          <div className="flex items-center gap-4 text-sm">
-                            <span className={`flex items-center gap-1.5 ${course.totalProgress < 50 ? 'text-amber-400' : 'text-success-400'}`}>
-                              <div className="w-2 h-2 rounded-full bg-current" />
-                              {course.totalProgress}%
-                            </span>
-                            <span className="text-gray-400 flex items-center gap-1.5">
+                          <h3 className="font-bold text-lg mb-1 group-hover:text-primary-400 transition-colors">{course.name}</h3>
+                          <p className="text-sm text-gray-500 mb-4">{course.lessons.length} lessons to complete</p>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-20 h-2 bg-surface-700/50 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full ${course.totalProgress < 50 ? 'bg-gradient-to-r from-amber-500 to-orange-500' : 'bg-gradient-to-r from-green-500 to-emerald-500'}`}
+                                  style={{ width: `${course.totalProgress}%` }}
+                                />
+                              </div>
+                              <span className="text-sm font-medium">{course.totalProgress}%</span>
+                            </div>
+                            <span className={`flex items-center gap-1.5 text-sm font-medium ${urgent ? 'text-amber-400' : 'text-gray-400'}`}>
                               <Calendar className="h-4 w-4" />
-                              {days}d left
+                              {days}d
                             </span>
                           </div>
                         </div>
@@ -1914,74 +1970,76 @@ Problem: ${chatInput}`
                 </section>
               )}
               
-              {/* All Courses */}
+              {/* All Courses - Gaming Style */}
               <section>
-                <h2 className="text-lg font-semibold mb-3 md:mb-4 flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-primary-400" />
-                  Your Courses
+                <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-primary-500/20 flex items-center justify-center">
+                    <BookOpen className="h-5 w-5 text-primary-400" />
+                  </div>
+                  <span className="bg-gradient-to-r from-primary-400 to-accent-400 bg-clip-text text-transparent">Your Quests</span>
                 </h2>
                 {filteredCourses.length === 0 ? (
-                  <div className="text-center py-12 md:py-16 bg-gray-900/30 rounded-2xl border border-gray-800/50">
-                    <div className="w-14 h-14 md:w-16 md:h-16 bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                      <BookOpen className="h-7 w-7 md:h-8 md:w-8 text-gray-600" />
+                  <div className="game-card text-center py-12 md:py-16">
+                    <div className="w-20 h-20 bg-gradient-to-br from-primary-500/20 to-secondary-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 animate-pulse">
+                      <BookOpen className="h-10 w-10 text-primary-400" />
                     </div>
-                    <h3 className="text-base md:text-lg font-medium mb-2">No courses yet</h3>
-                    <p className="text-gray-500 mb-6 text-sm md:text-base px-4">Upload your study materials to get started</p>
+                    <h3 className="text-xl font-bold mb-2">No Quests Started</h3>
+                    <p className="text-gray-400 mb-6 text-sm md:text-base px-4 max-w-sm mx-auto">Upload your study materials and begin your learning adventure!</p>
                     <button 
                       onClick={() => setShowNewCourse(true)}
-                      className="bg-primary-600 hover:bg-primary-500 active:scale-95 px-5 md:px-6 py-2.5 md:py-3 rounded-xl font-medium inline-flex items-center gap-2 transition-all shadow-lg shadow-primary-500/25 cursor-pointer"
+                      className="btn-primary inline-flex items-center gap-2"
                     >
                       <Plus className="h-5 w-5" />
-                      Create Your First Course
+                      Start New Quest
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredCourses.map(course => {
                       const style = getSubjectStyle(course.name)
                       return (
                         <div
                           key={course.id}
                           onClick={() => { setActiveCourse(course); setView(course.needsAssessment ? 'assessment' : 'course') }}
-                          className="bg-surface-800/60 border border-white/5 rounded-2xl p-4 md:p-5 cursor-pointer hover:bg-surface-700/60 hover:border-white/10 active:scale-[0.98] transition-all group relative"
+                          className="game-card p-5 cursor-pointer group relative"
                         >
                           <button
                             onClick={(e) => { e.stopPropagation(); deleteCourse(course.id) }}
-                            className="absolute top-3 right-3 md:top-4 md:right-4 p-1.5 hover:bg-red-500/20 rounded-lg md:opacity-0 md:group-hover:opacity-100 transition-opacity cursor-pointer"
+                            className="absolute top-3 right-3 p-1.5 hover:bg-red-500/20 rounded-lg md:opacity-0 md:group-hover:opacity-100 transition-all cursor-pointer border border-transparent hover:border-red-500/30"
                           >
                             <X className="h-4 w-4 text-red-400" />
                           </button>
                           
-                          <div className="flex items-start gap-3 md:block">
-                            <div className={`w-11 h-11 md:w-12 md:h-12 rounded-xl bg-gradient-to-br ${style.color} flex items-center justify-center text-xl md:text-2xl md:mb-4 shrink-0 shadow-lg`}>
+                          <div className="flex items-start gap-4">
+                            <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${style.color} flex items-center justify-center text-2xl shrink-0 group-hover:scale-110 transition-transform`} style={{ boxShadow: '0 0 20px rgba(168, 85, 247, 0.2)' }}>
                               {style.icon}
                             </div>
                             
-                            <div className="flex-1 min-w-0 md:block">
-                              <h3 className="font-semibold mb-0.5 md:mb-1 group-hover:text-primary-400 transition-colors truncate">{course.name}</h3>
-                              <p className="text-sm text-gray-500 mb-2 md:mb-4">{course.lessons.length} lessons</p>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-bold mb-1 group-hover:text-primary-400 transition-colors truncate">{course.name}</h3>
+                              <p className="text-sm text-gray-500 mb-3">{course.lessons.length} lessons</p>
                               
                               {course.needsAssessment ? (
-                                <div className="inline-flex items-center gap-2 text-amber-400 text-xs md:text-sm bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
-                                  <Zap className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                                  Take assessment
+                                <div className="gaming-badge bg-amber-500/20 text-amber-400 border-amber-500/30">
+                                  <Zap className="h-3.5 w-3.5" />
+                                  Start Assessment
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-3">
-                                  <div className="flex-1 bg-surface-700 rounded-full h-1.5 md:h-2 overflow-hidden">
+                                  <div className="flex-1 bg-surface-700/50 rounded-full h-2 overflow-hidden border border-primary-500/10">
                                     <div 
                                       className={`h-full rounded-full bg-gradient-to-r ${style.color} transition-all duration-500`} 
                                       style={{ width: `${course.totalProgress}%` }} 
                                     />
                                   </div>
-                                  <span className="text-xs md:text-sm text-gray-400 font-medium">{course.totalProgress}%</span>
+                                  <span className="text-sm text-primary-400 font-bold">{course.totalProgress}%</span>
                                 </div>
                               )}
                             </div>
                           </div>
                           
                           {course.sharedFrom && (
-                            <p className="text-xs text-gray-500 mt-3 flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-lg w-fit">
+                            <p className="text-xs text-primary-400/70 mt-3 flex items-center gap-1.5 bg-primary-500/10 px-2 py-1 rounded-lg w-fit border border-primary-500/20">
                               <Share2 className="h-3 w-3" />
                               From {course.sharedFrom}
                             </p>
@@ -1995,19 +2053,19 @@ Problem: ${chatInput}`
             </div>
           )}
           
-          {/* PUBLIC LIBRARY */}
+          {/* PUBLIC LIBRARY - Gaming Style */}
           {view === 'public' && (
             <div className="p-4 md:p-6 max-w-6xl mx-auto">
               {/* Header */}
               <div className="mb-6 md:mb-8">
-                <h1 className="text-2xl md:text-3xl font-bold mb-2">Public Library</h1>
-                <p className="text-gray-400">Discover subjects shared by the community. Import and start learning instantly!</p>
+                <h1 className="text-2xl md:text-3xl font-bold mb-2 font-display bg-gradient-to-r from-primary-400 via-accent-400 to-secondary-400 bg-clip-text text-transparent">Public Library</h1>
+                <p className="text-gray-400">Discover quests shared by the community. Import and start learning instantly!</p>
               </div>
               
               {/* Search & Filter */}
               <div className="flex flex-col md:flex-row gap-3 md:gap-4 mb-6">
                 <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-primary-400" />
                   <input
                     type="text"
                     value={publicSearchQuery}
@@ -3138,13 +3196,13 @@ Problem: ${chatInput}`
         </div>
       )}
       
-      {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface-800/95 backdrop-blur-xl border-t border-white/5 px-1 py-2 safe-area-bottom z-40">
+      {/* Mobile Bottom Navigation - Gaming Style */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-gradient-to-t from-surface-900/98 to-surface-800/95 backdrop-blur-xl border-t border-primary-500/20 px-1 py-2 safe-area-bottom z-40">
         <div className="flex items-center justify-around max-w-md mx-auto">
           <button
             onClick={() => { setView('home'); setActiveCourse(null) }}
-            className={`flex flex-col items-center gap-0.5 py-2 px-2 rounded-xl transition-all cursor-pointer ${
-              view === 'home' ? 'text-primary-400 bg-primary-500/10' : 'text-gray-500 active:bg-white/5'
+            className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all cursor-pointer ${
+              view === 'home' ? 'text-primary-400 bg-primary-500/20 shadow-glow-sm' : 'text-gray-500 active:bg-primary-500/10'
             }`}
           >
             <Home className="h-5 w-5" />
@@ -3153,8 +3211,8 @@ Problem: ${chatInput}`
           
           <button
             onClick={() => setView('public')}
-            className={`flex flex-col items-center gap-0.5 py-2 px-2 rounded-xl transition-all cursor-pointer ${
-              view === 'public' ? 'text-primary-400 bg-primary-500/10' : 'text-gray-500 active:bg-white/5'
+            className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all cursor-pointer ${
+              view === 'public' ? 'text-primary-400 bg-primary-500/20 shadow-glow-sm' : 'text-gray-500 active:bg-primary-500/10'
             }`}
           >
             <Users className="h-5 w-5" />
@@ -3165,15 +3223,16 @@ Problem: ${chatInput}`
             onClick={() => setShowNewCourse(true)}
             className="flex flex-col items-center gap-0.5 py-1.5 px-2 -mt-5 cursor-pointer"
           >
-            <div className="bg-primary-600 hover:bg-primary-500 p-3 rounded-2xl shadow-lg shadow-primary-500/30 active:scale-95 transition-all">
+            <div className="bg-gradient-to-br from-primary-500 to-secondary-500 hover:from-primary-400 hover:to-secondary-400 p-3.5 rounded-2xl shadow-glow active:scale-95 transition-all relative">
               <Plus className="h-5 w-5" />
+              <div className="absolute inset-0 rounded-2xl border border-white/20" />
             </div>
           </button>
           
           <button
             onClick={() => setView('chat')}
-            className={`flex flex-col items-center gap-0.5 py-2 px-2 rounded-xl transition-all cursor-pointer ${
-              view === 'chat' ? 'text-primary-400 bg-primary-500/10' : 'text-gray-500 active:bg-white/5'
+            className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all cursor-pointer ${
+              view === 'chat' ? 'text-primary-400 bg-primary-500/20 shadow-glow-sm' : 'text-gray-500 active:bg-primary-500/10'
             }`}
           >
             <Bot className="h-5 w-5" />
@@ -3182,76 +3241,92 @@ Problem: ${chatInput}`
           
           <button
             onClick={() => activeCourse ? setView('course') : null}
-            className={`flex flex-col items-center gap-0.5 py-2 px-2 rounded-xl transition-all cursor-pointer ${
-              view === 'course' ? 'text-primary-400 bg-primary-500/10' : 'text-gray-500 active:bg-white/5'
+            className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all cursor-pointer ${
+              view === 'course' ? 'text-primary-400 bg-primary-500/20 shadow-glow-sm' : 'text-gray-500 active:bg-primary-500/10'
             } ${!activeCourse ? 'opacity-40' : ''}`}
           >
             <BookOpen className="h-5 w-5" />
-            <span className="text-[10px] font-medium">Course</span>
+            <span className="text-[10px] font-medium">Quest</span>
           </button>
         </div>
       </nav>
       
-      {/* XP Gain Animation */}
+      {/* XP Gain Animation - Neon Style */}
       {xpGain && (
         <div className="fixed top-20 right-4 md:right-8 z-50 animate-bounce">
-          <div className="bg-amber-500 text-amber-900 px-4 py-2 rounded-xl font-bold shadow-lg shadow-amber-500/30 flex items-center gap-2">
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-5 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2" style={{ boxShadow: '0 0 30px rgba(245, 158, 11, 0.5)' }}>
             <Zap className="h-5 w-5" />
             +{xpGain.amount} XP
-            <span className="text-sm font-normal">{xpGain.reason}</span>
+            <span className="text-sm font-normal opacity-90">{xpGain.reason}</span>
           </div>
         </div>
       )}
       
-      {/* Level Up Overlay */}
+      {/* Level Up Overlay - Gaming Celebration */}
       {showLevelUp && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowLevelUp(null)}>
-          <div className="bg-surface-800 rounded-3xl p-8 text-center max-w-sm mx-4 border border-white/10 animate-pulse">
-            <div className={`w-24 h-24 rounded-3xl bg-gradient-to-br ${showLevelUp.color} flex items-center justify-center text-5xl mx-auto mb-6 shadow-2xl`}>
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50" onClick={() => setShowLevelUp(null)}>
+          {/* Animated background particles */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-primary-500/20 rounded-full blur-3xl animate-pulse" />
+            <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-secondary-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '0.5s' }} />
+          </div>
+          
+          <div className="game-card p-8 text-center max-w-sm mx-4 border-primary-500/40 relative" style={{ boxShadow: '0 0 60px rgba(168, 85, 247, 0.3)' }}>
+            {/* Glow ring */}
+            <div className="absolute inset-0 rounded-2xl border-2 border-primary-500/50 animate-pulse" />
+            
+            <div className={`w-28 h-28 rounded-2xl bg-gradient-to-br ${showLevelUp.color} flex items-center justify-center text-6xl mx-auto mb-6 animate-bounce relative`} style={{ boxShadow: '0 0 40px rgba(168, 85, 247, 0.5)' }}>
               {showLevelUp.icon}
+              <div className="absolute inset-0 rounded-2xl border-2 border-white/30" />
             </div>
-            <h2 className="text-2xl font-bold mb-2">Level Up!</h2>
-            <p className="text-3xl font-bold bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent mb-4">
+            
+            <h2 className="text-3xl font-bold mb-2 font-display bg-gradient-to-r from-primary-400 via-accent-400 to-secondary-400 bg-clip-text text-transparent">LEVEL UP!</h2>
+            <p className="text-4xl font-bold bg-gradient-to-r from-amber-400 via-yellow-400 to-orange-400 bg-clip-text text-transparent mb-4">
               {showLevelUp.name}
             </p>
-            <p className="text-gray-400 mb-6">Keep learning to unlock more ranks!</p>
+            <p className="text-gray-400 mb-6">You've unlocked a new rank! Keep conquering quests!</p>
             <button 
               onClick={() => setShowLevelUp(null)}
-              className="px-8 py-3 bg-primary-600 hover:bg-primary-500 rounded-xl font-medium transition-colors cursor-pointer"
+              className="w-full btn-primary py-4 text-lg"
             >
-              Awesome! 🎉
+              🎮 Continue Quest
             </button>
           </div>
         </div>
       )}
       
-      {/* Challenge Mode Indicator */}
+      {/* Challenge Mode Indicator - Gaming HUD */}
       {challengeMode && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50">
-          <div className={`px-4 py-2 rounded-xl font-medium flex items-center gap-3 shadow-lg ${
-            challengeMode === 'survival' ? 'bg-red-500/20 border border-red-500/30 text-red-400' :
-            challengeMode === 'timed' ? 'bg-blue-500/20 border border-blue-500/30 text-blue-400' :
-            'bg-purple-500/20 border border-purple-500/30 text-purple-400'
-          }`}>
+          <div className={`px-5 py-3 rounded-xl font-bold flex items-center gap-4 backdrop-blur-xl ${
+            challengeMode === 'survival' ? 'bg-gradient-to-r from-red-500/30 to-pink-500/20 border border-red-500/40 text-red-400' :
+            challengeMode === 'timed' ? 'bg-gradient-to-r from-cyan-500/30 to-blue-500/20 border border-cyan-500/40 text-cyan-400' :
+            'bg-gradient-to-r from-purple-500/30 to-violet-500/20 border border-purple-500/40 text-purple-400'
+          }`} style={{ boxShadow: challengeMode === 'survival' ? '0 0 25px rgba(239, 68, 68, 0.3)' : challengeMode === 'timed' ? '0 0 25px rgba(34, 211, 238, 0.3)' : '0 0 25px rgba(168, 85, 247, 0.3)' }}>
             {challengeMode === 'survival' && (
               <>
-                <Heart className="h-5 w-5" />
-                <span>{challengeLives} Lives</span>
+                <div className="flex items-center gap-1.5">
+                  {[...Array(3)].map((_, i) => (
+                    <Heart key={i} className={`h-5 w-5 ${i < challengeLives ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
+                  ))}
+                </div>
+                <span className="text-lg">Survival Mode</span>
               </>
             )}
             {challengeMode === 'timed' && (
               <>
-                <Timer className="h-5 w-5" />
-                <span>{challengeTimer}s</span>
+                <Timer className="h-6 w-6" />
+                <span className="text-2xl font-mono">{challengeTimer}s</span>
+                <span>Speed Run</span>
               </>
             )}
             {challengeMode === 'boss' && (
               <>
-                <Swords className="h-5 w-5" />
-                <span>Boss Fight</span>
+                <Swords className="h-6 w-6" />
+                <span className="text-lg">⚔️ Boss Fight</span>
               </>
             )}
-            <button onClick={() => setChallengeMode(null)} className="ml-2 hover:text-white">
+            <button onClick={() => setChallengeMode(null)} className="ml-2 p-1 hover:bg-white/10 rounded-lg transition-colors">
               <X className="h-4 w-4" />
             </button>
           </div>
