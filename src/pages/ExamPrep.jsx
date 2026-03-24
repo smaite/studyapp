@@ -316,12 +316,12 @@ Return ONLY valid JSON array:
 
       const lessonsResponse = await sendMessage([{ role: 'user', content: lessonsPrompt }], subjectName)
       
-      let lessonsJson = lessonsResponse.content.replace(/```json\s*/gi, '').replace(/```\s*/g, '')
-      const startIdx = lessonsJson.indexOf('[')
-      const endIdx = lessonsJson.lastIndexOf(']')
-      if (startIdx !== -1 && endIdx !== -1) lessonsJson = lessonsJson.substring(startIdx, endIdx + 1)
+      const parsedLessons = safeParseJSON(lessonsResponse.content, [])
+      if (parsedLessons.length === 0) {
+        throw new Error('Failed to generate lessons. Please try again.')
+      }
       
-      const lessons = JSON.parse(lessonsJson).map((l, idx) => ({
+      const lessons = parsedLessons.map((l, idx) => ({
         ...l, 
         id: idx + 1, 
         progress: 0, 
