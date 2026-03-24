@@ -1801,6 +1801,15 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
   const sendChatMessage = async () => {
     if ((!chatInput.trim() && !chatImage && !chatAttachment) || chatLoading) return
 
+    const chatReqId = `chat-${Date.now()}`
+    console.log('[ExamPrep]', chatReqId, 'sendChatMessage:start', {
+      inputLength: chatInput?.length || 0,
+      hasImage: !!chatImage,
+      hasPdfAttachment: chatAttachment?.type === 'pdf',
+      mathMode,
+      course: activeCourse?.name || null
+    })
+
     const userMessage = { role: 'user', content: chatInput, image: chatImage, attachment: chatAttachment }
     setChatMessages(prev => [...prev, userMessage])
     setChatInput('')
@@ -1813,6 +1822,7 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
       let parsedSolution = null
       let sourceRefs = []
       const isMathProblem = mathMode || /[0-9+\-*/=^√∫∑]/.test(chatInput) || chatImage
+      console.log('[ExamPrep]', chatReqId, 'routing', { isMathProblem })
 
       if (isMathProblem && (chatImage || /solve|calculate|find|compute|evaluate|simplify/i.test(chatInput))) {
         const mathPrompt = `You are an expert math tutor. Solve this problem step by step.
@@ -1869,6 +1879,12 @@ Respond in ${activeCourse?.language || 'English'} language.`
       }
 
       const assistantText = parsedSolution?.fullExplanation || response?.content || response?.text || ''
+      console.log('[ExamPrep]', chatReqId, 'response_meta', {
+        hasParsedSolution: !!parsedSolution,
+        hasResponseObject: !!response,
+        responseKeys: response ? Object.keys(response) : [],
+        assistantTextLength: assistantText.length
+      })
       if (!assistantText) {
         throw new Error('Empty AI response from proxy')
       }
@@ -1881,6 +1897,10 @@ Respond in ${activeCourse?.language || 'English'} language.`
         diagram: inferDiagramRequest(chatInput)
       }])
     } catch (error) {
+      console.error('[ExamPrep]', chatReqId, 'sendChatMessage:error', {
+        message: error?.message,
+        stack: error?.stack
+      })
       setChatMessages(prev => [...prev, {
         role: 'assistant',
         content: `Error: ${error.message}. Make sure AI proxy is running.`,

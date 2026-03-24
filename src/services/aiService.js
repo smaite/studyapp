@@ -3,6 +3,11 @@
 const API_BASE_URL = import.meta.env.VITE_AI_API_URL || 'http://localhost:8080'
 const API_KEY = import.meta.env.VITE_AI_API_KEY || 'dummy'
 const MODEL = import.meta.env.VITE_AI_MODEL || 'gemini-3-flash'
+const DEBUG_AI = true
+
+const logAi = (...args) => {
+  if (DEBUG_AI) console.log('[AI Service]', ...args)
+}
 
 const extractTextFromApiData = (data) => {
   if (!data) return null
@@ -28,6 +33,7 @@ const extractTextFromApiData = (data) => {
 }
 
 export const analyzeDocument = async (content, fileType, subject, question) => {
+  const reqId = `doc-${Date.now()}`
   const systemPrompt = `You are an expert AI tutor helping a student study for their ${subject || 'exam'}. 
 The student has uploaded study materials. Analyze the content and help them understand it.
 
@@ -65,6 +71,7 @@ Guidelines:
   }
 
   try {
+    logAi(reqId, 'request', { endpoint: `${API_BASE_URL}/v1/messages`, model: MODEL, subject, fileType })
     const response = await fetch(`${API_BASE_URL}/v1/messages`, {
       method: 'POST',
       headers: {
@@ -76,19 +83,23 @@ Guidelines:
     })
 
     if (!response.ok) {
+      logAi(reqId, 'http_error', { status: response.status })
       throw new Error(`API Error: ${response.status}`)
     }
 
     const raw = await response.text()
+    logAi(reqId, 'raw_response_preview', raw.substring(0, 180))
     let data
     try {
       data = JSON.parse(raw)
     } catch {
+      logAi(reqId, 'json_parse_error', raw.substring(0, 220))
       throw new Error(`Proxy returned invalid JSON: ${raw.substring(0, 200)}`)
     }
 
     const text = extractTextFromApiData(data)
     if (typeof text === 'string' && text.trim()) return { content: text }
+    logAi(reqId, 'unexpected_format', { keys: Object.keys(data || {}), contentType: typeof data?.content })
     throw new Error(`Unexpected response format: ${JSON.stringify(data).substring(0, 200)}`)
   } catch (error) {
     console.error('Document Analysis Error:', error)
@@ -97,6 +108,7 @@ Guidelines:
 }
 
 export const sendMessage = async (messages, subject = null, onChunk = null) => {
+  const reqId = `msg-${Date.now()}`
   const systemPrompt = subject 
     ? `You are an expert AI tutor specializing in ${subject}. Your role is to help students understand concepts deeply, not just give answers. 
     
@@ -134,6 +146,7 @@ Use markdown formatting for clarity.`
   }
 
   try {
+    logAi(reqId, 'request', { endpoint: `${API_BASE_URL}/v1/messages`, model: MODEL, subject, messageCount: messages?.length || 0 })
     const response = await fetch(`${API_BASE_URL}/v1/messages`, {
       method: 'POST',
       headers: {
@@ -146,22 +159,27 @@ Use markdown formatting for clarity.`
 
     if (!response.ok) {
       const errorData = await response.text()
+      logAi(reqId, 'http_error', { status: response.status, errorData: errorData.substring(0, 220) })
       throw new Error(`API Error: ${response.status} - ${errorData}`)
     }
 
     const raw = await response.text()
+    logAi(reqId, 'raw_response_preview', raw.substring(0, 180))
     let data
     try {
       data = JSON.parse(raw)
     } catch {
+      logAi(reqId, 'json_parse_error', raw.substring(0, 220))
       throw new Error(`Proxy returned invalid JSON: ${raw.substring(0, 200)}`)
     }
 
     const text = extractTextFromApiData(data)
     if (typeof text === 'string' && text.trim()) {
+      logAi(reqId, 'success', { textLength: text.length })
       if (onChunk) onChunk(text)
       return { content: text }
     }
+    logAi(reqId, 'unexpected_format', { keys: Object.keys(data || {}), contentType: typeof data?.content })
     throw new Error(`Unexpected response format: ${JSON.stringify(data).substring(0, 200)}`)
   } catch (error) {
     console.error('AI Service Error:', error)
@@ -170,6 +188,7 @@ Use markdown formatting for clarity.`
 }
 
 export const analyzeImage = async (imageBase64, question, subject = null) => {
+  const reqId = `img-${Date.now()}`
   const systemContext = subject
     ? `You are an expert AI tutor specializing in ${subject}. The student has shared an image (likely a problem or question). Analyze it carefully and help them understand and solve it step by step.`
     : `You are a helpful AI tutor. The student has shared an image. Analyze it and provide helpful guidance.`
@@ -197,6 +216,7 @@ export const analyzeImage = async (imageBase64, question, subject = null) => {
   }
 
   try {
+    logAi(reqId, 'request', { endpoint: `${API_BASE_URL}/v1/messages`, model: MODEL, subject, imageBytes: imageBase64?.length || 0 })
     const response = await fetch(`${API_BASE_URL}/v1/messages`, {
       method: 'POST',
       headers: {
@@ -208,19 +228,26 @@ export const analyzeImage = async (imageBase64, question, subject = null) => {
     })
 
     if (!response.ok) {
+      logAi(reqId, 'http_error', { status: response.status })
       throw new Error(`API Error: ${response.status}`)
     }
 
     const raw = await response.text()
+    logAi(reqId, 'raw_response_preview', raw.substring(0, 180))
     let data
     try {
       data = JSON.parse(raw)
     } catch {
+      logAi(reqId, 'json_parse_error', raw.substring(0, 220))
       throw new Error(`Proxy returned invalid JSON: ${raw.substring(0, 200)}`)
     }
 
     const text = extractTextFromApiData(data)
-    if (typeof text === 'string' && text.trim()) return { content: text }
+    if (typeof text === 'string' && text.trim()) {
+      logAi(reqId, 'success', { textLength: text.length })
+      return { content: text }
+    }
+    logAi(reqId, 'unexpected_format', { keys: Object.keys(data || {}), contentType: typeof data?.content })
     throw new Error(`Unexpected response format: ${JSON.stringify(data).substring(0, 200)}`)
   } catch (error) {
     console.error('Image Analysis Error:', error)
