@@ -23,6 +23,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
 
 const STORAGE_KEY = 'studyai_courses'
 const PROGRESS_KEY = 'studyai_progress'
+const CHAT_HISTORY_KEY = 'studyai_chat_history'
 
 // Gamification constants
 const XP_REWARDS = {
@@ -331,6 +332,14 @@ export default function ExamPrep() {
   const chatEndRef = useRef(null)
   const chatFileInputRef = useRef(null)
   const [chatImage, setChatImage] = useState(null)
+  const [chatHistoryByCourse, setChatHistoryByCourse] = useState(() => {
+    try {
+      const saved = localStorage.getItem(CHAT_HISTORY_KEY)
+      return saved ? JSON.parse(saved) : {}
+    } catch {
+      return {}
+    }
+  })
   
   // Replan modal
   const [showReplanModal, setShowReplanModal] = useState(false)
@@ -373,6 +382,11 @@ export default function ExamPrep() {
   useEffect(() => {
     localStorage.setItem(PROGRESS_KEY, JSON.stringify(userProgress))
   }, [userProgress])
+
+  // Save chat history
+  useEffect(() => {
+    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chatHistoryByCourse))
+  }, [chatHistoryByCourse])
   
   // Check and update streak on load
   useEffect(() => {
@@ -504,12 +518,15 @@ export default function ExamPrep() {
     const arrayBuffer = await file.arrayBuffer()
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
     let fullText = ''
+    const pages = []
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i)
       const textContent = await page.getTextContent()
-      fullText += textContent.items.map(item => item.str).join(' ') + '\n\n'
+      const pageText = textContent.items.map(item => item.str).join(' ').trim()
+      pages.push({ page: i, text: pageText })
+      fullText += `[Page ${i}]\n${pageText}\n\n`
     }
-    return fullText.trim()
+    return { fullText: fullText.trim(), pages, totalPages: pdf.numPages }
   }
 
   const handleFileUpload = async (e) => {
@@ -524,13 +541,14 @@ export default function ExamPrep() {
 
     try {
       let allContent = ''
+      let pdfPageIndex = []
       
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
         setProcessingStatus(`Processing ${file.name}... (${i + 1}/${files.length})`)
         
         if (file.type === 'application/pdf') {
-          const text = await extractTextFromPDF(file)
+          const { fullText: text, pages } = await extractTextFromPDF(file)
           if (text.length < 200) {
             // Scanned PDF - use vision
             const arrayBuffer = await file.arrayBuffer()
@@ -543,9 +561,11 @@ export default function ExamPrep() {
               canvas.height = viewport.height
               await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise
               const response = await analyzeImage(canvas.toDataURL('image/png'), 'Extract all text from this document page', subjectName)
+              pdfPageIndex.push({ page: p, text: (response.content || '').substring(0, 4000), source: file.name })
               allContent += response.content + '\n\n'
             }
           } else {
+            pdfPageIndex.push(...pages.map(p => ({ ...p, text: (p.text || '').substring(0, 4000), source: file.name })))
             allContent += text + '\n\n'
           }
         } else if (file.type.startsWith('image/')) {
@@ -596,6 +616,7 @@ Return ONLY valid JSON array:
         language: courseLanguage,
         examDate: examDate || null,
         content: allContent,
+        pdfPageIndex,
         lessons,
         totalProgress: 0,
         createdAt: new Date().toISOString(),
@@ -634,13 +655,14 @@ Return ONLY valid JSON array:
 
     try {
       let newContent = ''
+      let newPdfPageIndex = []
       
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
         setProcessingStatus(`Processing ${file.name}... (${i + 1}/${files.length})`)
         
         if (file.type === 'application/pdf') {
-          const text = await extractTextFromPDF(file)
+          const { fullText: text, pages } = await extractTextFromPDF(file)
           if (text.length < 200) {
             const arrayBuffer = await file.arrayBuffer()
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
@@ -652,9 +674,11 @@ Return ONLY valid JSON array:
               canvas.height = viewport.height
               await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise
               const response = await analyzeImage(canvas.toDataURL('image/png'), 'Extract all text from this document page', activeCourse.name)
+              newPdfPageIndex.push({ page: p, text: (response.content || '').substring(0, 4000), source: file.name })
               newContent += response.content + '\n\n'
             }
           } else {
+            newPdfPageIndex.push(...pages.map(p => ({ ...p, text: (p.text || '').substring(0, 4000), source: file.name })))
             newContent += text + '\n\n'
           }
         } else if (file.type.startsWith('image/')) {
@@ -699,7 +723,11 @@ Return ONLY valid JSON.`
       const updates = safeParseJSON(response.content, { newLessons: [], updatedLessons: [] })
       
       // Update the course
-      const updatedCourse = { ...activeCourse, content: combinedContent }
+      const updatedCourse = {
+        ...activeCourse,
+        content: combinedContent,
+        pdfPageIndex: [...(activeCourse.pdfPageIndex || []), ...newPdfPageIndex]
+      }
       
       // Add new lessons
       if (updates.newLessons && updates.newLessons.length > 0) {
@@ -1427,6 +1455,59 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
 
+  // Load chat history for active course (or global chat)
+  useEffect(() => {
+    const historyKey = activeCourse ? `course_${activeCourse.id}` : 'general'
+    setChatMessages(chatHistoryByCourse[historyKey] || [])
+  }, [activeCourse, chatHistoryByCourse])
+
+  // Persist latest chat messages into history map
+  useEffect(() => {
+    const historyKey = activeCourse ? `course_${activeCourse.id}` : 'general'
+    setChatHistoryByCourse(prev => {
+      const previous = prev[historyKey] || []
+      if (JSON.stringify(previous) === JSON.stringify(chatMessages)) return prev
+      return {
+        ...prev,
+        [historyKey]: chatMessages.slice(-100)
+      }
+    })
+  }, [chatMessages, activeCourse])
+
+  const getCourseContextForChat = (query) => {
+    if (!activeCourse) return ''
+    const pageMatch = query.match(/page\s+(\d+)/i)
+    if (pageMatch && activeCourse.pdfPageIndex?.length) {
+      const pageNum = Number(pageMatch[1])
+      const exactPage = activeCourse.pdfPageIndex.filter(p => p.page === pageNum).slice(0, 3)
+      if (exactPage.length > 0) {
+        return `\n\nCOURSE PAGE CONTEXT (use this to answer accurately):\n${exactPage.map(p => `Source: ${p.source || 'PDF'} | Page ${p.page}\n${p.text?.substring(0, 4000) || ''}`).join('\n\n---\n\n')}`
+      }
+    }
+
+    if (activeCourse.pdfPageIndex?.length) {
+      const normalizedQuery = query.toLowerCase()
+      const tokenized = normalizedQuery.split(/\W+/).filter(t => t.length > 3)
+      const scoredPages = activeCourse.pdfPageIndex
+        .map(p => {
+          const pageText = (p.text || '').toLowerCase()
+          const score = tokenized.reduce((acc, token) => acc + (pageText.includes(token) ? 1 : 0), 0)
+          return { ...p, score }
+        })
+        .filter(p => p.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+
+      if (scoredPages.length > 0) {
+        return `\n\nRELEVANT COURSE CONTEXT:\n${scoredPages.map(p => `Source: ${p.source || 'PDF'} | Page ${p.page}\n${p.text?.substring(0, 2500) || ''}`).join('\n\n---\n\n')}`
+      }
+    }
+
+    return activeCourse.content
+      ? `\n\nCOURSE CONTEXT:\n${activeCourse.content.substring(0, 12000)}`
+      : ''
+  }
+
   const handleChatImageUpload = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -1489,9 +1570,13 @@ Problem: ${chatInput}`
         const imgPrompt = activeCourse ? `${chatInput}\n\nRespond in ${activeCourse.language || 'English'} language.` : chatInput
         response = await analyzeImage(chatImage, imgPrompt, 'General')
       } else {
+        const courseContext = getCourseContextForChat(chatInput)
         const apiMsgs = chatMessages.slice(-10).map(m => ({ role: m.role, content: m.content }))
         const userMsg = activeCourse 
-          ? { role: 'user', content: `${chatInput}\n\nRespond in ${activeCourse.language || 'English'} language.` }
+          ? {
+              role: 'user',
+              content: `${chatInput}\n\nRespond in ${activeCourse.language || 'English'} language.\nIf the user asks for a specific page, prioritize exact page context and cite page number in answer.${courseContext}`
+            }
           : { role: 'user', content: chatInput }
         apiMsgs.push(userMsg)
         response = await sendMessage(apiMsgs, 'AI Tutor')
