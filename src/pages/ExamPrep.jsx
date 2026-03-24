@@ -237,6 +237,8 @@ const safeParseJSON = (text, fallback = []) => {
 function InteractiveDiagram({ diagram }) {
   const [a, setA] = useState(Number(diagram?.a) || 6)
   const [b, setB] = useState(Number(diagram?.b) || 8)
+  const [x, setX] = useState(Number(diagram?.x) || 4)
+  const [y, setY] = useState(Number(diagram?.y) || -2)
 
   if (!diagram) return null
 
@@ -276,6 +278,30 @@ function InteractiveDiagram({ diagram }) {
     )
   }
 
+  if (diagram.type === 'cartesian') {
+    const toSvgX = (v) => 180 + v * 6
+    const toSvgY = (v) => 100 - v * 6
+    return (
+      <div className="bg-surface-800/80 rounded-2xl p-4 border border-primary-500/20 space-y-3">
+        <p className="text-sm text-gray-300 font-medium">{diagram.title || 'Interactive Coordinate Graph'}</p>
+        <svg viewBox="0 0 360 200" className="w-full h-auto bg-surface-900/40 rounded-lg">
+          <line x1="20" y1="100" x2="340" y2="100" stroke="#64748b" strokeWidth="1.5" />
+          <line x1="180" y1="15" x2="180" y2="185" stroke="#64748b" strokeWidth="1.5" />
+          <line x1={toSvgX(x)} y1="100" x2={toSvgX(x)} y2={toSvgY(y)} stroke="#22d3ee" strokeDasharray="4 3" />
+          <line x1="180" y1={toSvgY(y)} x2={toSvgX(x)} y2={toSvgY(y)} stroke="#22d3ee" strokeDasharray="4 3" />
+          <circle cx={toSvgX(x)} cy={toSvgY(y)} r="5" fill="#a855f7" />
+          <text x={toSvgX(x) + 8} y={toSvgY(y) - 8} fill="#e2e8f0" fontSize="12">({x}, {y})</text>
+          <text x="332" y="94" fill="#94a3b8" fontSize="11">x</text>
+          <text x="186" y="20" fill="#94a3b8" fontSize="11">y</text>
+        </svg>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+          <label className="text-gray-300">x: <input type="range" min="-20" max="20" value={x} onChange={(e) => setX(Number(e.target.value))} className="w-full" /></label>
+          <label className="text-gray-300">y: <input type="range" min="-20" max="20" value={y} onChange={(e) => setY(Number(e.target.value))} className="w-full" /></label>
+        </div>
+      </div>
+    )
+  }
+
   return null
 }
 
@@ -301,6 +327,19 @@ const inferDiagramRequest = (text = '') => {
       title: 'Interactive Right Triangle',
       a: aMatch ? Number(aMatch[1]) : 6,
       b: bMatch ? Number(bMatch[1]) : 8
+    }
+  }
+  if (q.includes('graph') || q.includes('plot') || q.includes('chart') || q.includes('coordinate')) {
+    const xEq = text.match(/\bx\s*=\s*(-?\d+(?:\.\d+)?)/i)
+    const yEq = text.match(/\by\s*=\s*(-?\d+(?:\.\d+)?)/i)
+    const pair = text.match(/\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)/)
+    const xVal = xEq ? Number(xEq[1]) : pair ? Number(pair[1]) : 4
+    const yVal = yEq ? Number(yEq[1]) : pair ? Number(pair[2]) : -2
+    return {
+      type: 'cartesian',
+      title: 'Interactive Coordinate Graph',
+      x: xVal,
+      y: yVal
     }
   }
   return null
