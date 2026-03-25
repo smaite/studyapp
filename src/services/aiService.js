@@ -1,10 +1,7 @@
 // AI Service Configuration - Using Environment Variables
 // Supports Vite (VITE_) for local dev and Netlify env vars for production
-// In dev mode, use Vite proxy (/api/ai) to avoid CORS issues
-const isDev = import.meta.env.DEV
-const API_BASE_URL = isDev 
-  ? '/api/ai' 
-  : (import.meta.env.VITE_AI_API_URL || 'https://gthpanel.qzz.io').replace(/\/+$/, '') // Remove trailing slash if any
+// Both dev (Vite proxy) and prod (Netlify function) use /api/ai to avoid CORS
+const API_BASE_URL = '/api/ai'
 const API_KEY = import.meta.env.VITE_AI_API_KEY || 'dummy'
 
 // Dual model routing:
