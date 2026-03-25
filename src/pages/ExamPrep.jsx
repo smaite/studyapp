@@ -3022,7 +3022,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
                         <Bot className="h-5 w-5 text-primary-400" />
                       </div>
                     )}
-                    <div className={`max-w-[92%] lg:max-w-[82%] ${
+                    <div className={`max-w-[78%] sm:max-w-[85%] lg:max-w-[82%] ${
                       msg.role === 'user' ? 'bg-primary-600 rounded-2xl rounded-br-md' : 'bg-gray-800/80 rounded-2xl rounded-bl-md'
                     } px-5 py-4`}>
                       {msg.role === 'user' ? (
@@ -3093,7 +3093,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
                       <button
                         key={i}
                         onClick={() => setInput(q)}
-                        className="px-3 py-1.5 rounded-lg text-xs bg-surface-800 border border-primary-500/20 hover:border-primary-500/40 text-gray-300 cursor-pointer"
+                        className="max-w-full whitespace-normal break-words px-3 py-1.5 rounded-lg text-xs bg-surface-800 border border-primary-500/20 hover:border-primary-500/40 text-gray-300 cursor-pointer"
                       >
                         {q}
                       </button>
@@ -3128,29 +3128,39 @@ Respond in ${activeCourse?.language || 'English'} language.`
                   >
                     {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
                   </button>
+                  {isSpeaking && (
+                    <button
+                      onClick={stopSpeaking}
+                      className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-red-500/20 text-red-300 hover:bg-red-500/30 transition-colors"
+                      title="Stop reading"
+                    >
+                      <VolumeX className="h-3.5 w-3.5" />
+                      <span>Stop</span>
+                    </button>
+                  )}
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex gap-2 sm:gap-3">
                   <input
                     type="text"
                     value={interimText || input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleStepResponse()}
                     placeholder={isListening ? (voiceLang === 'hindi' ? 'सुन रहा हूं...' : 'Listening...') : 'Type your answer or ask a question...'}
-                    className={`flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-primary-500 ${isListening ? 'text-primary-400' : ''}`}
+                    className={`flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-xl px-3 sm:px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-primary-500 ${isListening ? 'text-primary-400' : ''}`}
                     disabled={isListening}
                   />
                   <input type="file" ref={lessonFileInputRef} onChange={handleLessonAttachmentUpload} accept="image/*,application/pdf" className="hidden" />
                   <button
                     onClick={() => lessonFileInputRef.current?.click()}
-                    className="bg-gray-800 hover:bg-gray-700 p-3 rounded-xl"
+                    className="bg-gray-800 hover:bg-gray-700 p-2 sm:p-3 rounded-xl"
                     title="Attach image or PDF"
                   >
                     <FileUp className="h-5 w-5" />
                   </button>
                   <button
                     onClick={() => toggleVoiceListening('lesson')}
-                    className={`p-3 rounded-xl transition-all ${
+                    className={`p-2 sm:p-3 rounded-xl transition-all ${
                       isListening ? 'text-red-400 bg-red-500/20 animate-pulse' : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
                     }`}
                     title={isListening ? 'Stop listening' : 'Start voice input'}
@@ -3160,7 +3170,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
                   <button 
                     onClick={handleStepResponse}
                     disabled={(!input.trim() && !lessonAttachment) || isLoading}
-                    className="bg-primary-600 hover:bg-primary-500 disabled:opacity-50 p-3 rounded-xl"
+                    className="bg-primary-600 hover:bg-primary-500 disabled:opacity-50 p-2 sm:p-3 rounded-xl"
                   >
                     <Send className="h-5 w-5" />
                   </button>
