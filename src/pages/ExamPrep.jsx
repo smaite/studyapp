@@ -1325,16 +1325,26 @@ Be friendly and make it engaging!`
       const currentStepData = lessonContent[currentStep]
       
       // Check if user understood
-      const checkPrompt = `Student answered: "${userMsg || 'Used an attachment'}"
-Expected concept: "${currentStepData?.checkAnswer || 'understanding'}"
-Question was: "${currentStepData?.checkQuestion || 'Do you understand?'}"
+      const checkPrompt = `You are teaching "${activeLesson.title}" - Step ${currentStep + 1}/${lessonContent.length}.
+
+Current topic: ${currentStepData?.title || 'Understanding'}
+Key concept to teach: ${currentStepData?.content?.substring(0, 500) || 'the lesson content'}
+
+Student just said: "${userMsg || 'Used an attachment'}"
 ${attachmentContext}
 
-Evaluate if the student understood (even partially).
-If they need help, explain briefly.
-If they understood, praise them and say "READY_NEXT" at the end.
-Do NOT repeat the same question text verbatim again unless the student explicitly asks to repeat.
-Be encouraging and use emojis!`
+IMPORTANT INSTRUCTIONS:
+1. If student seems confused or asks for help → TEACH the actual content with a clear explanation and example
+2. If student gives a correct/partial answer → Praise briefly, then TEACH the next concept
+3. If student says "yes/okay/got it/understood" → TEACH MORE, don't just ask questions back
+4. NEVER just ask "Can you rephrase?" - always provide educational value
+
+Your response MUST include:
+- A clear explanation of the concept (2-3 sentences)
+- One concrete example
+- End with a small check question OR say "READY_NEXT" if they truly mastered it
+
+Be encouraging, use emojis, and ACTUALLY TEACH - don't just chat!`
 
       const response = await sendMessage([
         { role: 'user', content: `Lesson: ${activeLesson.title}` },
@@ -1344,11 +1354,19 @@ Be encouraging and use emojis!`
       
       const aiResponse = response.content
       const cleanedResponse = aiResponse.replace('READY_NEXT', '').trim()
+      const fallbackTeachingResponse = `Let me teach this clearly 👇\n\n${currentStepData?.content || 'Here is the key concept for this step.'}\n\nExample: ${currentStepData?.checkAnswer || 'Apply this idea to a simple real-life situation to verify understanding.'}\n\nQuick check: ${currentStepData?.checkQuestion || 'Can you explain this concept in your own words?' }`
+      const looksLikeNonTeachingReply =
+        !cleanedResponse ||
+        cleanedResponse.length < 40 ||
+        /(rephrase|clarify|what do you mean|can you explain your question)/i.test(cleanedResponse)
       setMessages(prev => {
         const lastAssistant = [...prev].reverse().find(m => m.role === 'assistant')
-        const finalResponse = lastAssistant && cleanEscapedText(lastAssistant.content) === cleanEscapedText(cleanedResponse)
+        const finalResponse = looksLikeNonTeachingReply
+          ? fallbackTeachingResponse
+          : (lastAssistant && cleanEscapedText(lastAssistant.content) === cleanEscapedText(cleanedResponse))
           ? "Great progress. Let's continue to the next part."
           : cleanedResponse
+        if (voiceEnabled && finalResponse) speakMessage(finalResponse)
         return [...prev, { role: 'assistant', content: finalResponse, diagram: inferDiagramRequest(`${userMsg}\n${finalResponse}`) }]
       })
       setStepCheckShown(prev => ({ ...prev, [currentStep]: true }))
@@ -1362,6 +1380,7 @@ Be encouraging and use emojis!`
             content: `# ${lessonContent[currentStep + 1].title}\n\n${lessonContent[currentStep + 1].content}`,
             diagram: inferDiagramRequest(lessonContent[currentStep + 1].content)
           }])
+          if (voiceEnabled) speakMessage(`${lessonContent[currentStep + 1].title}. ${lessonContent[currentStep + 1].content}`)
         }, 1500)
       } else if (aiResponse.includes('READY_NEXT') && currentStep === lessonContent.length - 1) {
         // Lesson complete - quiz time
@@ -1370,10 +1389,17 @@ Be encouraging and use emojis!`
             role: 'assistant',
             content: `🎉 **Amazing work!** You've completed all the learning steps!\n\nNow let's test what you learned with a quick quiz. Ready?\n\n*Click "Take Quiz" below to continue!*`
           }])
+          if (voiceEnabled) speakMessage('Amazing work. You completed all learning steps. Ready for quiz?')
         }, 1500)
       }
     } catch (error) {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Hmm, let me think about that... 🤔 Can you rephrase?' }])
+      const currentStepData = lessonContent[currentStep]
+      const fallbackContent = `I had a small issue, but let's keep learning 📘\n\n${currentStepData?.content || 'Let me explain this concept step by step.'}\n\nExample: ${currentStepData?.checkAnswer || 'Try applying this concept once with a simple example.'}\n\nQuick check: ${currentStepData?.checkQuestion || 'What did you understand from this explanation?' }`
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: fallbackContent
+      }])
+      if (voiceEnabled) speakMessage(fallbackContent)
     } finally {
       setIsLoading(false)
     }
@@ -1902,7 +1928,8 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
   }
 
   // Voice chat functions
-  const toggleVoiceListening = () => {
+  const toggleVoiceListening = (target = 'chat') => {
+    const setTargetInput = target === 'lesson' ? setInput : setChatInput
     if (isListening) {
       voiceService.stopListening()
       setIsListening(false)
@@ -1912,7 +1939,7 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
       const started = voiceService.startListening(
         (result) => {
           if (result.isFinal && result.final) {
-            setChatInput(prev => prev + result.final)
+            setTargetInput(prev => prev + result.final)
             setInterimText('')
             setIsListening(false)
           } else {
@@ -2947,7 +2974,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
           
           {/* LESSON STEP VIEW */}
           {view === 'lesson-step' && activeLesson && (
-            <div className="flex flex-col h-full max-w-4xl lg:max-w-6xl xl:max-w-7xl mx-auto w-full">
+            <div className="flex flex-col h-full max-w-4xl lg:max-w-7xl 2xl:max-w-[110rem] mx-auto w-full">
               {/* Lesson Header */}
               <div className="p-3 md:p-4 border-b border-gray-800 bg-gray-900/50">
                 <div className="flex items-center justify-between">
@@ -2995,7 +3022,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
                         <Bot className="h-5 w-5 text-primary-400" />
                       </div>
                     )}
-                    <div className={`max-w-[85%] ${
+                    <div className={`max-w-[92%] lg:max-w-[82%] ${
                       msg.role === 'user' ? 'bg-primary-600 rounded-2xl rounded-br-md' : 'bg-gray-800/80 rounded-2xl rounded-bl-md'
                     } px-5 py-4`}>
                       {msg.role === 'user' ? (
@@ -3056,13 +3083,13 @@ Respond in ${activeCourse?.language || 'English'} language.`
                   </div>
                 )}
 
-                {lessonContent[currentStep]?.checkQuestion && (
-                  <div className="flex flex-wrap gap-2 mb-3">
+                <div className="flex flex-wrap gap-2 mb-3">
                     {[
-                      cleanEscapedText(lessonContent[currentStep].checkQuestion),
+                      lessonContent[currentStep]?.checkQuestion ? cleanEscapedText(lessonContent[currentStep].checkQuestion) : `Explain ${lessonContent[currentStep]?.title || 'this step'} in simple words`,
                       'Give me a similar question',
-                      'Explain this with an example'
-                    ].map((q, i) => (
+                      'Explain this with an example',
+                      `Summarize ${lessonContent[currentStep]?.title || 'this topic'} in 3 points`
+                    ].filter(Boolean).map((q, i) => (
                       <button
                         key={i}
                         onClick={() => setInput(q)}
@@ -3071,8 +3098,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
                         {q}
                       </button>
                     ))}
-                  </div>
-                )}
+                </div>
                 
                 {lessonAttachment && (
                   <div className="mb-3">
@@ -3086,14 +3112,33 @@ Respond in ${activeCourse?.language || 'English'} language.`
                   </div>
                 )}
 
+                <div className="flex items-center justify-end gap-2 mb-2">
+                  <button
+                    onClick={toggleVoiceLang}
+                    className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                    title="Toggle language"
+                  >
+                    <Languages className="h-3.5 w-3.5" />
+                    <span>{voiceLang === 'english' ? 'EN' : 'हि'}</span>
+                  </button>
+                  <button
+                    onClick={() => setVoiceEnabled(!voiceEnabled)}
+                    className={`p-1.5 rounded-lg transition-colors ${voiceEnabled ? 'text-primary-400 bg-primary-500/20' : 'text-gray-500 bg-gray-800'}`}
+                    title={voiceEnabled ? 'Disable auto-speak' : 'Enable auto-speak'}
+                  >
+                    {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                  </button>
+                </div>
+
                 <div className="flex gap-3">
                   <input
                     type="text"
-                    value={input}
+                    value={interimText || input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleStepResponse()}
-                    placeholder="Type your answer or ask a question..."
-                    className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-primary-500"
+                    placeholder={isListening ? (voiceLang === 'hindi' ? 'सुन रहा हूं...' : 'Listening...') : 'Type your answer or ask a question...'}
+                    className={`flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-primary-500 ${isListening ? 'text-primary-400' : ''}`}
+                    disabled={isListening}
                   />
                   <input type="file" ref={lessonFileInputRef} onChange={handleLessonAttachmentUpload} accept="image/*,application/pdf" className="hidden" />
                   <button
@@ -3102,6 +3147,15 @@ Respond in ${activeCourse?.language || 'English'} language.`
                     title="Attach image or PDF"
                   >
                     <FileUp className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => toggleVoiceListening('lesson')}
+                    className={`p-3 rounded-xl transition-all ${
+                      isListening ? 'text-red-400 bg-red-500/20 animate-pulse' : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
+                    }`}
+                    title={isListening ? 'Stop listening' : 'Start voice input'}
+                  >
+                    {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
                   </button>
                   <button 
                     onClick={handleStepResponse}
