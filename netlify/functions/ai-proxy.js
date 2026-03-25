@@ -19,11 +19,18 @@ export default async (request, context) => {
     })
   }
 
+  // Use Netlify env vars (set in dashboard)
   const AI_API_URL = process.env.AI_API_URL || 'https://gthpanel.qzz.io'
   const AI_API_KEY = process.env.AI_API_KEY || 'dummy'
 
+  console.log('[AI Proxy] Using API URL:', AI_API_URL)
+
   try {
     const body = await request.json()
+    console.log('[AI Proxy] Request model:', body.model)
+    
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 25000) // 25s timeout (Netlify max is 26s on free)
     
     const response = await fetch(`${AI_API_URL}/v1/messages`, {
       method: 'POST',
@@ -32,10 +39,18 @@ export default async (request, context) => {
         'x-api-key': AI_API_KEY,
         'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: controller.signal
     })
+    
+    clearTimeout(timeoutId)
 
     const data = await response.text()
+    console.log('[AI Proxy] Response status:', response.status, 'Length:', data.length)
+    
+    if (!response.ok) {
+      console.error('[AI Proxy] Upstream error:', data.substring(0, 500))
+    }
     
     return new Response(data, {
       status: response.status,
@@ -45,8 +60,25 @@ export default async (request, context) => {
       }
     })
   } catch (error) {
-    console.error('AI Proxy Error:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error('[AI Proxy] Error:', error.name, error.message)
+    
+    if (error.name === 'AbortError') {
+      return new Response(JSON.stringify({ 
+        error: 'Request timeout - AI response took too long',
+        suggestion: 'Try a shorter message or simpler question'
+      }), {
+        status: 504,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      })
+    }
+    
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      type: error.name 
+    }), {
       status: 500,
       headers: {
         'Content-Type': 'application/json',
