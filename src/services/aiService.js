@@ -10,8 +10,8 @@ const API_KEY = import.meta.env.VITE_AI_API_KEY || 'dummy'
 // Dual model routing:
 // - HEAVY_MODEL: for analyzing PDFs, images, creating subjects (more accurate)
 // - FAST_MODEL: for chat, quizzes, tutoring (faster responses)
-const HEAVY_MODEL = import.meta.env.VITE_AI_HEAVY_MODEL || 'gemini-2.5-pro'
-const FAST_MODEL = import.meta.env.VITE_AI_FAST_MODEL || 'gemini-3-flash-preview'
+const HEAVY_MODEL = import.meta.env.VITE_AI_HEAVY_MODEL || 'gpt-5.2'
+const FAST_MODEL = import.meta.env.VITE_AI_FAST_MODEL || 'claude-haiku-4.5'
 
 const DEBUG_AI = true
 
