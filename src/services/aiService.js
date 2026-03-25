@@ -9,7 +9,7 @@ const API_KEY = import.meta.env.VITE_AI_API_KEY || 'dummy'
 // Model routing:
 // - HEAVY_MODEL: gemini-3-flash for extraction (api.gthpanel)
 // - FAST_MODEL: claude-haiku-4.5 for chat (gthpanel)
-const HEAVY_MODEL = import.meta.env.VITE_AI_HEAVY_MODEL || 'gemini-3-flash'
+const HEAVY_MODEL = 'gemini-3-flash'
 const FAST_MODEL = import.meta.env.VITE_AI_FAST_MODEL || 'gpt-5.4-mini'
 
 const DEBUG_AI = true
@@ -45,6 +45,15 @@ const extractTextFromApiData = (data) => {
   return null
 }
 
+const toImagePayload = (dataUrlOrBase64) => {
+  const value = String(dataUrlOrBase64 || '')
+  const match = value.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/)
+  if (match) {
+    return { mediaType: match[1], data: match[2] }
+  }
+  return { mediaType: 'image/jpeg', data: value.replace(/^data:image\/\w+;base64,/, '') }
+}
+
 export const analyzeDocument = async (content, fileType, subject, question) => {
   const reqId = `doc-${Date.now()}`
   const systemPrompt = `You are an expert AI tutor helping a student study for their ${subject || 'exam'}. 
@@ -58,14 +67,15 @@ Guidelines:
 - Suggest areas to focus on
 - Create study notes from the content`
 
+  const imagePayload = fileType === 'image' ? toImagePayload(content) : null
   const userContent = fileType === 'image' 
     ? [
         {
           type: 'image',
           source: {
             type: 'base64',
-            media_type: 'image/jpeg',
-            data: content.replace(/^data:image\/\w+;base64,/, '')
+            media_type: imagePayload.mediaType,
+            data: imagePayload.data
           }
         },
         {
@@ -220,6 +230,7 @@ export const analyzeImage = async (imageBase64, question, subject = null) => {
     ? `You are an expert AI tutor specializing in ${subject}. Your assistant name is Kira AI. If referring to yourself, always say Kira AI. The student has shared an image (likely a problem or question). Analyze it carefully and help them understand and solve it step by step.`
     : `You are a helpful AI tutor. Your assistant name is Kira AI. If referring to yourself, always say Kira AI. The student has shared an image. Analyze it and provide helpful guidance.`
 
+  const imagePayload = toImagePayload(imageBase64)
   const requestBody = {
     model: HEAVY_MODEL,
     max_tokens: 4096,
@@ -230,8 +241,8 @@ export const analyzeImage = async (imageBase64, question, subject = null) => {
           type: 'image',
           source: {
             type: 'base64',
-            media_type: 'image/jpeg',
-            data: imageBase64.replace(/^data:image\/\w+;base64,/, '')
+            media_type: imagePayload.mediaType,
+            data: imagePayload.data
           }
         },
         {
