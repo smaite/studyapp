@@ -1,4 +1,5 @@
 // Netlify standard function (not Edge) to proxy AI API requests
+// Uses gthpanel.qzz.io for claude models
 const AI_API_URL = 'https://gthpanel.qzz.io'
 
 exports.handler = async (event) => {

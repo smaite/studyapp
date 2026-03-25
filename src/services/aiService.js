@@ -1,16 +1,16 @@
 // AI Service Configuration
 // Split API routing:
-// - EXTRACTION_API: for document/image analysis (direct call to gthpanel, no timeout issues)
-// - CHAT_API: for chat, quizzes, tutoring (uses Netlify proxy)
-const EXTRACTION_API = 'https://gthpanel.qzz.io'
+// - EXTRACTION_API: api.gthpanel.qzz.io for gemini models
+// - CHAT_API: gthpanel.qzz.io for claude models (via Netlify proxy)
+const EXTRACTION_API = 'https://api.gthpanel.qzz.io'
 const CHAT_API = '/api/ai'
 const API_KEY = import.meta.env.VITE_AI_API_KEY || 'dummy'
 
 // Model routing:
-// - HEAVY_MODEL: for analyzing PDFs, images (extraction)
-// - FAST_MODEL: for chat, quizzes, tutoring
-const HEAVY_MODEL = import.meta.env.VITE_AI_HEAVY_MODEL || 'gemini-3-flash-preview'
-const FAST_MODEL = import.meta.env.VITE_AI_FAST_MODEL || 'gemini-3-flash-preview'
+// - HEAVY_MODEL: gemini-3-flash for extraction (api.gthpanel)
+// - FAST_MODEL: claude-haiku-4.5 for chat (gthpanel)
+const HEAVY_MODEL = import.meta.env.VITE_AI_HEAVY_MODEL || 'gemini-3-flash'
+const FAST_MODEL = import.meta.env.VITE_AI_FAST_MODEL || 'claude-haiku-4.5'
 
 const DEBUG_AI = true
 
