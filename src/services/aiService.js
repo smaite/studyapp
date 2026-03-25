@@ -1,8 +1,14 @@
 // AI Service Configuration - Using Environment Variables
 // Supports Vite (VITE_) for local dev and Netlify env vars for production
-const API_BASE_URL = import.meta.env.VITE_AI_API_URL || 'http://localhost:8080'
+const API_BASE_URL = import.meta.env.VITE_AI_API_URL || 'http://127.0.0.1:24680'
 const API_KEY = import.meta.env.VITE_AI_API_KEY || 'dummy'
-const MODEL = import.meta.env.VITE_AI_MODEL || 'gemini-3-flash'
+
+// Dual model routing:
+// - HEAVY_MODEL: for analyzing PDFs, images, creating subjects (more accurate)
+// - FAST_MODEL: for chat, quizzes, tutoring (faster responses)
+const HEAVY_MODEL = import.meta.env.VITE_AI_HEAVY_MODEL || 'claude-sonnet-4.6'
+const FAST_MODEL = import.meta.env.VITE_AI_FAST_MODEL || 'gemini-3-flash-preview'
+
 const DEBUG_AI = true
 
 const logAi = (...args) => {
@@ -67,7 +73,7 @@ Guidelines:
     : question || `Please analyze this study material and create comprehensive study notes:\n\n${content}`
 
   const requestBody = {
-    model: MODEL,
+    model: HEAVY_MODEL,
     max_tokens: 8192,
     messages: [{
       role: 'user',
@@ -76,7 +82,7 @@ Guidelines:
   }
 
   try {
-    logAi(reqId, 'request', { endpoint: `${API_BASE_URL}/v1/messages`, model: MODEL, subject, fileType })
+    logAi(reqId, 'request', { endpoint: `${API_BASE_URL}/v1/messages`, model: HEAVY_MODEL, subject, fileType })
     const response = await fetch(`${API_BASE_URL}/v1/messages`, {
       method: 'POST',
       headers: {
@@ -157,13 +163,13 @@ Identity:
   ]
 
   const requestBody = {
-    model: MODEL,
+    model: FAST_MODEL,
     max_tokens: 4096,
     messages: apiMessages
   }
 
   try {
-    logAi(reqId, 'request', { endpoint: `${API_BASE_URL}/v1/messages`, model: MODEL, subject, messageCount: safeMessages.length })
+    logAi(reqId, 'request', { endpoint: `${API_BASE_URL}/v1/messages`, model: FAST_MODEL, subject, messageCount: safeMessages.length })
     const response = await fetch(`${API_BASE_URL}/v1/messages`, {
       method: 'POST',
       headers: {
@@ -212,7 +218,7 @@ export const analyzeImage = async (imageBase64, question, subject = null) => {
     : `You are a helpful AI tutor. Your assistant name is Kira AI. If referring to yourself, always say Kira AI. The student has shared an image. Analyze it and provide helpful guidance.`
 
   const requestBody = {
-    model: MODEL,
+    model: HEAVY_MODEL,
     max_tokens: 4096,
     messages: [{
       role: 'user',
@@ -234,7 +240,7 @@ export const analyzeImage = async (imageBase64, question, subject = null) => {
   }
 
   try {
-    logAi(reqId, 'request', { endpoint: `${API_BASE_URL}/v1/messages`, model: MODEL, subject, imageBytes: imageBase64?.length || 0 })
+    logAi(reqId, 'request', { endpoint: `${API_BASE_URL}/v1/messages`, model: HEAVY_MODEL, subject, imageBytes: imageBase64?.length || 0 })
     const response = await fetch(`${API_BASE_URL}/v1/messages`, {
       method: 'POST',
       headers: {
