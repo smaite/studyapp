@@ -5,3 +5,8 @@
 
 [functions]
   node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/api/ai/*"
+  to = "/.netlify/functions/ai-proxy"
+  status = 200

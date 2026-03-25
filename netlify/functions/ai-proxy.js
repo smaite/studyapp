@@ -1,35 +1,30 @@
-// Netlify serverless function to proxy AI API requests (bypasses CORS)
-// Using hardcoded URL since Netlify env vars have issues with encrypted files
+// Netlify standard function (not Edge) to proxy AI API requests
 const AI_API_URL = 'https://api.gthpanel.qzz.io'
 
-export default async (request, context) => {
+exports.handler = async (event) => {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, x-api-key, anthropic-version',
+    'Content-Type': 'application/json'
+  }
+
   // Handle CORS preflight
-  if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, x-api-key, anthropic-version'
-      }
-    })
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers, body: '' }
   }
 
-  if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' }
-    })
+  if (event.httpMethod !== 'POST') {
+    return { 
+      statusCode: 405, 
+      headers, 
+      body: JSON.stringify({ error: 'Method not allowed' }) 
+    }
   }
-
-  console.log('[AI Proxy] Using API URL:', AI_API_URL)
 
   try {
-    const body = await request.json()
+    const body = JSON.parse(event.body)
     console.log('[AI Proxy] Request model:', body.model)
-    
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 25000)
     
     const response = await fetch(`${AI_API_URL}/v1/messages`, {
       method: 'POST',
@@ -38,55 +33,23 @@ export default async (request, context) => {
         'x-api-key': 'dummy',
         'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify(body),
-      signal: controller.signal
+      body: JSON.stringify(body)
     })
-    
-    clearTimeout(timeoutId)
 
     const data = await response.text()
-    console.log('[AI Proxy] Response status:', response.status, 'Length:', data.length)
+    console.log('[AI Proxy] Response status:', response.status)
     
-    if (!response.ok) {
-      console.error('[AI Proxy] Upstream error:', data.substring(0, 500))
+    return {
+      statusCode: response.status,
+      headers,
+      body: data
     }
-    
-    return new Response(data, {
-      status: response.status,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
-    })
   } catch (error) {
-    console.error('[AI Proxy] Error:', error.name, error.message)
-    
-    if (error.name === 'AbortError') {
-      return new Response(JSON.stringify({ 
-        error: 'Request timeout - AI response took too long',
-        suggestion: 'Try a shorter message or simpler question'
-      }), {
-        status: 504,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-        }
-      })
+    console.error('[AI Proxy] Error:', error.message)
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: error.message })
     }
-    
-    return new Response(JSON.stringify({ 
-      error: error.message,
-      type: error.name 
-    }), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
-    })
   }
-}
-
-export const config = {
-  path: '/api/ai/v1/messages'
 }
