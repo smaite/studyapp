@@ -1,4 +1,7 @@
 // Netlify serverless function to proxy AI API requests (bypasses CORS)
+// Using hardcoded URL since Netlify env vars have issues with encrypted files
+const AI_API_URL = 'https://api.gthpanel.qzz.io'
+
 export default async (request, context) => {
   // Handle CORS preflight
   if (request.method === 'OPTIONS') {
@@ -19,10 +22,6 @@ export default async (request, context) => {
     })
   }
 
-  // Use Netlify env vars (set in dashboard)
-  const AI_API_URL = process.env.AI_API_URL || 'https://gthpanel.qzz.io'
-  const AI_API_KEY = process.env.AI_API_KEY || 'dummy'
-
   console.log('[AI Proxy] Using API URL:', AI_API_URL)
 
   try {
@@ -30,13 +29,13 @@ export default async (request, context) => {
     console.log('[AI Proxy] Request model:', body.model)
     
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 25000) // 25s timeout (Netlify max is 26s on free)
+    const timeoutId = setTimeout(() => controller.abort(), 25000)
     
     const response = await fetch(`${AI_API_URL}/v1/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': AI_API_KEY,
+        'x-api-key': 'dummy',
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify(body),
