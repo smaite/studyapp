@@ -5,10 +5,11 @@ const API_BASE_URL = '/api/ai'
 const API_KEY = import.meta.env.VITE_AI_API_KEY || 'dummy'
 
 // Dual model routing:
-// - HEAVY_MODEL: for analyzing PDFs, images, creating subjects (more accurate)
-// - FAST_MODEL: for chat, quizzes, tutoring (faster responses)
-const HEAVY_MODEL = import.meta.env.VITE_AI_HEAVY_MODEL || 'gpt-5.2'
-const FAST_MODEL = import.meta.env.VITE_AI_FAST_MODEL || 'claude-haiku-4.5'
+// Using fast models to stay within Netlify's 10s function timeout
+// - HEAVY_MODEL: for analyzing PDFs, images (still needs to be fast)
+// - FAST_MODEL: for chat, quizzes, tutoring
+const HEAVY_MODEL = import.meta.env.VITE_AI_HEAVY_MODEL || 'gpt-4.1'
+const FAST_MODEL = import.meta.env.VITE_AI_FAST_MODEL || 'gpt-4.1'
 
 const DEBUG_AI = true
 
@@ -75,7 +76,7 @@ Guidelines:
 
   const requestBody = {
     model: HEAVY_MODEL,
-    max_tokens: 8192,
+    max_tokens: 2048,  // Reduced for faster response within Netlify timeout
     messages: [{
       role: 'user',
       content: userContent
