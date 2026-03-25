@@ -1,15 +1,16 @@
-// AI Service Configuration - Using Environment Variables
-// Supports Vite (VITE_) for local dev and Netlify env vars for production
-// Both dev (Vite proxy) and prod (Netlify function) use /api/ai to avoid CORS
-const API_BASE_URL = '/api/ai'
+// AI Service Configuration
+// Split API routing:
+// - EXTRACTION_API: for document/image analysis (direct call to gthpanel, no timeout issues)
+// - CHAT_API: for chat, quizzes, tutoring (uses Netlify proxy)
+const EXTRACTION_API = 'https://api.gthpanel.qzz.io'
+const CHAT_API = '/api/ai'
 const API_KEY = import.meta.env.VITE_AI_API_KEY || 'dummy'
 
-// Dual model routing:
-// Using fast models to stay within Netlify's 10s function timeout
-// - HEAVY_MODEL: for analyzing PDFs, images (still needs to be fast)
+// Model routing:
+// - HEAVY_MODEL: for analyzing PDFs, images (extraction)
 // - FAST_MODEL: for chat, quizzes, tutoring
-const HEAVY_MODEL = import.meta.env.VITE_AI_HEAVY_MODEL || 'gpt-4.1'
-const FAST_MODEL = import.meta.env.VITE_AI_FAST_MODEL || 'gpt-4.1'
+const HEAVY_MODEL = import.meta.env.VITE_AI_HEAVY_MODEL || 'gemini-2.5-pro'
+const FAST_MODEL = import.meta.env.VITE_AI_FAST_MODEL || 'gemini-3-flash-preview'
 
 const DEBUG_AI = true
 
@@ -76,7 +77,7 @@ Guidelines:
 
   const requestBody = {
     model: HEAVY_MODEL,
-    max_tokens: 2048,  // Reduced for faster response within Netlify timeout
+    max_tokens: 4096,
     messages: [{
       role: 'user',
       content: userContent
@@ -84,8 +85,8 @@ Guidelines:
   }
 
   try {
-    logAi(reqId, 'request', { endpoint: `${API_BASE_URL}/v1/messages`, model: HEAVY_MODEL, subject, fileType })
-    const response = await fetch(`${API_BASE_URL}/v1/messages`, {
+    logAi(reqId, 'request', { endpoint: `${EXTRACTION_API}/v1/messages`, model: HEAVY_MODEL, subject, fileType })
+    const response = await fetch(`${EXTRACTION_API}/v1/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -166,13 +167,13 @@ Identity:
 
   const requestBody = {
     model: FAST_MODEL,
-    max_tokens: 4096,
+    max_tokens: 2048,
     messages: apiMessages
   }
 
   try {
-    logAi(reqId, 'request', { endpoint: `${API_BASE_URL}/v1/messages`, model: FAST_MODEL, subject, messageCount: safeMessages.length })
-    const response = await fetch(`${API_BASE_URL}/v1/messages`, {
+    logAi(reqId, 'request', { endpoint: `${CHAT_API}/v1/messages`, model: FAST_MODEL, subject, messageCount: safeMessages.length })
+    const response = await fetch(`${CHAT_API}/v1/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -242,8 +243,8 @@ export const analyzeImage = async (imageBase64, question, subject = null) => {
   }
 
   try {
-    logAi(reqId, 'request', { endpoint: `${API_BASE_URL}/v1/messages`, model: HEAVY_MODEL, subject, imageBytes: imageBase64?.length || 0 })
-    const response = await fetch(`${API_BASE_URL}/v1/messages`, {
+    logAi(reqId, 'request', { endpoint: `${EXTRACTION_API}/v1/messages`, model: HEAVY_MODEL, subject, imageBytes: imageBase64?.length || 0 })
+    const response = await fetch(`${EXTRACTION_API}/v1/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
