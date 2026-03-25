@@ -8,9 +8,11 @@ import {
   Home, Calendar, History, Settings, Copy, Users, Link2,
   ArrowRight, Zap, Star, Menu, ChevronDown, FolderPlus, FileUp,
   Calculator, PenLine, Camera, ThumbsUp, ThumbsDown, RefreshCw,
-  Flame, Award, Timer, Heart, Swords, TrendingUp
+  Flame, Award, Timer, Heart, Swords, TrendingUp,
+  Mic, MicOff, Volume2, VolumeX, Languages
 } from 'lucide-react'
 import { sendMessage, analyzeImage } from '../services/aiService'
+import voiceService from '../services/voiceService'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import MathKeyboard from '../components/MathKeyboard'
 import SolvingSteps from '../components/SolvingSteps'
@@ -556,6 +558,14 @@ export default function ExamPrep() {
   const chatFileInputRef = useRef(null)
   const [chatImage, setChatImage] = useState(null)
   const [chatAttachment, setChatAttachment] = useState(null) // { type: 'pdf', name, text, pages }
+  
+  // Voice chat state
+  const [isListening, setIsListening] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [voiceEnabled, setVoiceEnabled] = useState(true)
+  const [voiceLang, setVoiceLang] = useState('english') // 'english' or 'hindi'
+  const [interimText, setInterimText] = useState('')
+  
   const [chatHistoryByCourse, setChatHistoryByCourse] = useState(() => {
     try {
       const saved = localStorage.getItem(CHAT_HISTORY_KEY)
@@ -1891,6 +1901,66 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
     chatInputRef.current?.focus()
   }
 
+  // Voice chat functions
+  const toggleVoiceListening = () => {
+    if (isListening) {
+      voiceService.stopListening()
+      setIsListening(false)
+      setInterimText('')
+    } else {
+      voiceService.setLanguage(voiceLang)
+      const started = voiceService.startListening(
+        (result) => {
+          if (result.isFinal && result.final) {
+            setChatInput(prev => prev + result.final)
+            setInterimText('')
+            setIsListening(false)
+          } else {
+            setInterimText(result.interim)
+          }
+        },
+        (error) => {
+          console.error('Voice error:', error)
+          setIsListening(false)
+          setInterimText('')
+          if (error === 'not-allowed') {
+            alert('Microphone access denied. Please allow microphone access in your browser settings.')
+          }
+        }
+      )
+      setIsListening(started)
+    }
+  }
+
+  const speakMessage = (text) => {
+    if (!voiceEnabled) return
+    
+    // Clean text for speech (remove markdown, etc.)
+    const cleanText = text
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/`(.*?)`/g, '$1')
+      .replace(/#{1,6}\s/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/[*_~`#]/g, '')
+      .substring(0, 500) // Limit length for speech
+    
+    voiceService.setLanguage(voiceLang)
+    setIsSpeaking(true)
+    voiceService.speak(cleanText, () => setIsSpeaking(false))
+  }
+
+  const stopSpeaking = () => {
+    voiceService.stopSpeaking()
+    setIsSpeaking(false)
+  }
+
+  const toggleVoiceLang = () => {
+    const newLang = voiceLang === 'english' ? 'hindi' : 'english'
+    setVoiceLang(newLang)
+    voiceService.setLanguage(newLang)
+  }
+
   const sendChatMessage = async () => {
     if ((!chatInput.trim() && !chatImage && !chatAttachment) || chatLoading) return
 
@@ -1982,13 +2052,20 @@ Respond in ${activeCourse?.language || 'English'} language.`
         throw new Error('Empty AI response from proxy')
       }
 
-      setChatMessages(prev => [...prev, {
+      const assistantMessage = {
         role: 'assistant',
         content: assistantText,
         solution: parsedSolution,
         sourceRefs,
         diagram: inferDiagramRequest(chatInput)
-      }])
+      }
+      
+      setChatMessages(prev => [...prev, assistantMessage])
+      
+      // Auto-speak AI response if voice is enabled
+      if (voiceEnabled && assistantText) {
+        speakMessage(assistantText)
+      }
     } catch (error) {
       console.error('[ExamPrep]', chatReqId, 'sendChatMessage:error', {
         message: error?.message,
@@ -3372,6 +3449,13 @@ Respond in ${activeCourse?.language || 'English'} language.`
                           )}
                           
                           <div className="flex items-center gap-2 text-gray-500">
+                            <button 
+                              onClick={() => isSpeaking ? stopSpeaking() : speakMessage(msg.content)}
+                              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isSpeaking ? 'bg-primary-500/20 text-primary-400' : 'hover:bg-white/5'}`}
+                              title={isSpeaking ? 'Stop speaking' : 'Read aloud'}
+                            >
+                              {isSpeaking ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                            </button>
                             <button className="p-1.5 hover:bg-white/5 rounded-lg transition-colors cursor-pointer"><ThumbsUp className="h-4 w-4" /></button>
                             <button className="p-1.5 hover:bg-white/5 rounded-lg transition-colors cursor-pointer"><ThumbsDown className="h-4 w-4" /></button>
                           </div>
@@ -3439,15 +3523,35 @@ Respond in ${activeCourse?.language || 'English'} language.`
                 )}
 
                 <div className="p-3">
+                  {/* Voice language toggle */}
+                  <div className="flex items-center justify-end gap-2 mb-2">
+                    <button
+                      onClick={toggleVoiceLang}
+                      className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                      title="Toggle language"
+                    >
+                      <Languages className="h-3.5 w-3.5" />
+                      <span>{voiceLang === 'english' ? 'EN' : 'हि'}</span>
+                    </button>
+                    <button
+                      onClick={() => setVoiceEnabled(!voiceEnabled)}
+                      className={`p-1.5 rounded-lg transition-colors ${voiceEnabled ? 'text-primary-400 bg-primary-500/20' : 'text-gray-500 bg-gray-800'}`}
+                      title={voiceEnabled ? 'Disable auto-speak' : 'Enable auto-speak'}
+                    >
+                      {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  
                   <div className="bg-gray-800 rounded-xl border border-gray-700 focus-within:border-primary-500 transition-colors">
                     <input
                       ref={chatInputRef}
                       type="text"
-                      value={chatInput}
+                      value={interimText || chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && sendChatMessage()}
-                      placeholder={mathMode ? "Type a math problem..." : "Ask me anything..."}
-                      className="w-full bg-transparent px-4 py-3 text-white placeholder-gray-500 focus:outline-none"
+                      placeholder={isListening ? (voiceLang === 'hindi' ? 'सुन रहा हूं...' : 'Listening...') : (mathMode ? "Type a math problem..." : "Ask me anything...")}
+                      className={`w-full bg-transparent px-4 py-3 text-white placeholder-gray-500 focus:outline-none ${isListening ? 'text-primary-400' : ''}`}
+                      disabled={isListening}
                     />
                     
                     <div className="flex items-center justify-between px-3 pb-3">
@@ -3456,6 +3560,18 @@ Respond in ${activeCourse?.language || 'English'} language.`
                         <button onClick={() => chatFileInputRef.current?.click()}
                           className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg">
                           <Camera className="h-5 w-5" />
+                        </button>
+                        {/* Voice input button */}
+                        <button
+                          onClick={toggleVoiceListening}
+                          className={`p-2 rounded-lg transition-all ${
+                            isListening 
+                              ? 'text-red-400 bg-red-500/20 animate-pulse' 
+                              : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                          }`}
+                          title={isListening ? 'Stop listening' : 'Start voice input'}
+                        >
+                          {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
                         </button>
                         {mathMode && (
                           <button onClick={() => setShowMathKeyboard(!showMathKeyboard)}
