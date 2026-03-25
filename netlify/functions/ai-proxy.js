@@ -1,5 +1,5 @@
 // Netlify standard function (not Edge) to proxy AI API requests
-const AI_API_URL = 'https://api.gthpanel.qzz.io'
+const AI_API_URL = 'https://gthpanel.qzz.io'
 
 exports.handler = async (event) => {
   const headers = {
