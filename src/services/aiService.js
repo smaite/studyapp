@@ -1,6 +1,10 @@
 // AI Service Configuration - Using Environment Variables
 // Supports Vite (VITE_) for local dev and Netlify env vars for production
-const API_BASE_URL = import.meta.env.VITE_AI_API_URL || 'http://127.0.0.1:24680'
+// In dev mode, use Vite proxy (/api/ai) to avoid CORS issues
+const isDev = import.meta.env.DEV
+const API_BASE_URL = isDev 
+  ? '/api/ai' 
+  : (import.meta.env.VITE_AI_API_URL || 'http://127.0.0.1:24680')
 const API_KEY = import.meta.env.VITE_AI_API_KEY || 'dummy'
 
 // Dual model routing:
