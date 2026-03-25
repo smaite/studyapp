@@ -352,6 +352,9 @@ const cleanEscapedText = (value = '') => {
     .replace(/\$/g, '')
     .replace(/\\([{}])/g, '$1')
     .replace(/\\,/g, ',')
+    .replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, '$1/$2')  // \frac{a}{b} -> a/b
+    .replace(/\\sqrt\{([^}]*)\}/g, '√($1)')  // \sqrt{x} -> √(x)
+    .replace(/\\sqrt(\w)/g, '√$1')  // \sqrt x -> √x
     .replace(/\\in/g, '∈')
     .replace(/\\cup/g, '∪')
     .replace(/\\cap/g, '∩')
@@ -367,10 +370,27 @@ const cleanEscapedText = (value = '') => {
     .replace(/\\neq/g, '≠')
     .replace(/\\times/g, '×')
     .replace(/\\cdot/g, '·')
+    .replace(/\\pi/g, 'π')
+    .replace(/\\alpha/g, 'α')
+    .replace(/\\beta/g, 'β')
+    .replace(/\\gamma/g, 'γ')
+    .replace(/\\delta/g, 'δ')
+    .replace(/\\theta/g, 'θ')
+    .replace(/\\lambda/g, 'λ')
+    .replace(/\\mu/g, 'μ')
+    .replace(/\\sigma/g, 'σ')
+    .replace(/\\omega/g, 'ω')
+    .replace(/\\infty/g, '∞')
+    .replace(/\\sum/g, '∑')
+    .replace(/\\int/g, '∫')
     .replace(/\\mathbb\{Z\}/g, 'ℤ')
     .replace(/\\mathbb\{N\}/g, 'ℕ')
     .replace(/\\mathbb\{R\}/g, 'ℝ')
     .replace(/\\text\{([^}]*)\}/g, '$1')
+    .replace(/\^(\d)/g, (_, d) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d])  // x^2 -> x²
+    .replace(/\^\{(\d+)\}/g, (_, ds) => [...ds].map(d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]).join(''))
+    .replace(/_(\d)/g, (_, d) => '₀₁₂₃₄₅₆₇₈₉'[d])  // x_2 -> x₂
+    .replace(/_\{(\d+)\}/g, (_, ds) => [...ds].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join(''))
     .trim()
 }
 
@@ -2664,7 +2684,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
                     
                     <div className="mb-4 md:mb-6">
                       <div className="text-base md:text-lg text-gray-100">
-                        <MarkdownRenderer content={questions[currentQ]?.question} />
+                        <MarkdownRenderer content={cleanEscapedText(questions[currentQ]?.question)} />
                       </div>
                     </div>
                     
@@ -3042,7 +3062,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
                     </div>
                     
                     <div className="mb-6 text-lg">
-                      <MarkdownRenderer content={questions[currentQ]?.question} />
+                      <MarkdownRenderer content={cleanEscapedText(questions[currentQ]?.question)} />
                     </div>
                     
                     <div className="space-y-3 mb-6">
