@@ -7,7 +7,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api/ai': {
-        target: 'http://127.0.0.1:24680',
+        target: 'https://gthpanel.qzz.io', // Target AI API server
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/ai/, '')
       }

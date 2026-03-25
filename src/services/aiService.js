@@ -4,7 +4,7 @@
 const isDev = import.meta.env.DEV
 const API_BASE_URL = isDev 
   ? '/api/ai' 
-  : (import.meta.env.VITE_AI_API_URL || 'http://127.0.0.1:24680')
+  : (import.meta.env.VITE_AI_API_URL || 'https://gthpanel.qzz.io').replace(/\/+$/, '') // Remove trailing slash if any
 const API_KEY = import.meta.env.VITE_AI_API_KEY || 'dummy'
 
 // Dual model routing:
