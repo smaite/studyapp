@@ -2947,7 +2947,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
           
           {/* LESSON STEP VIEW */}
           {view === 'lesson-step' && activeLesson && (
-            <div className="flex flex-col h-full max-w-6xl mx-auto w-full">
+            <div className="flex flex-col h-full max-w-4xl lg:max-w-6xl xl:max-w-7xl mx-auto w-full">
               {/* Lesson Header */}
               <div className="p-3 md:p-4 border-b border-gray-800 bg-gray-900/50">
                 <div className="flex items-center justify-between">
@@ -3499,6 +3499,24 @@ Respond in ${activeCourse?.language || 'English'} language.`
 
               {/* Input Area */}
               <div className="border-t border-gray-800 bg-gray-900/50 shrink-0">
+                {/* Suggested follow-up questions */}
+                {chatMessages.length > 0 && !chatLoading && (
+                  <div className="px-3 pt-3 flex flex-wrap gap-2">
+                    {(mathMode 
+                      ? ['Explain step by step', 'Give me a similar problem', 'Show another method']
+                      : ['Tell me more', 'Give an example', 'Quiz me on this', 'Simplify this']
+                    ).map((q, i) => (
+                      <button 
+                        key={i} 
+                        onClick={() => handleChatFollowUp(q)}
+                        className="px-3 py-1.5 rounded-lg text-xs bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-gray-300 transition-all cursor-pointer"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
                 {chatImage && (
                   <div className="p-3 border-b border-gray-800">
                     <div className="relative inline-block">
