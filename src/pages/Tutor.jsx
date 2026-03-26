@@ -12,6 +12,166 @@ import MarkdownRenderer from '../components/MarkdownRenderer'
 import MathKeyboard from '../components/MathKeyboard'
 import SolvingSteps from '../components/SolvingSteps'
 
+// Interactive Diagram Component for geometry/graphs
+function InteractiveDiagram({ diagram }) {
+  const [a, setA] = useState(Number(diagram?.a) || 6)
+  const [b, setB] = useState(Number(diagram?.b) || 8)
+  const [x, setX] = useState(Number(diagram?.x) || 4)
+  const [y, setY] = useState(Number(diagram?.y) || -2)
+  const [angle, setAngle] = useState(Number(diagram?.angle) || 75)
+
+  if (!diagram || diagram.type === 'none') return null
+
+  if (diagram.type === 'angle') {
+    const radians = (angle * Math.PI) / 180
+    const length = 100
+    const endX = 50 + length * Math.cos(radians)
+    const endY = 150 - length * Math.sin(radians)
+    return (
+      <div className="bg-surface-800/80 rounded-2xl p-4 border border-primary-500/20 space-y-3">
+        <p className="text-sm text-gray-300 font-medium">{diagram.title || `Interactive ${angle}° Angle`}</p>
+        <svg viewBox="0 0 250 180" className="w-full h-auto bg-surface-900/40 rounded-lg">
+          {/* Base line */}
+          <line x1="50" y1="150" x2="200" y2="150" stroke="#60a5fa" strokeWidth="2" />
+          {/* Angle line */}
+          <line x1="50" y1="150" x2={endX} y2={endY} stroke="#a855f7" strokeWidth="2" />
+          {/* Arc for angle */}
+          <path d={`M 80 150 A 30 30 0 0 0 ${50 + 30 * Math.cos(radians)} ${150 - 30 * Math.sin(radians)}`} fill="none" stroke="#22d3ee" strokeWidth="1.5" />
+          {/* Angle label */}
+          <text x="90" y="138" fill="#22d3ee" fontSize="12">{angle}°</text>
+          {/* Point O */}
+          <circle cx="50" cy="150" r="3" fill="#fff" />
+          <text x="40" y="170" fill="#94a3b8" fontSize="11">O</text>
+        </svg>
+        <div className="text-xs">
+          <label className="text-gray-300 flex items-center gap-2">
+            Angle: {angle}°
+            <input type="range" min="1" max="180" value={angle} onChange={(e) => setAngle(Number(e.target.value))} className="flex-1" />
+          </label>
+        </div>
+      </div>
+    )
+  }
+
+  if (diagram.type === 'venn') {
+    return (
+      <div className="bg-surface-800/80 rounded-2xl p-4 border border-primary-500/20">
+        <p className="text-sm text-gray-300 mb-3 font-medium">{diagram.title || 'Interactive Venn Diagram'}</p>
+        <svg viewBox="0 0 320 180" className="w-full h-auto">
+          <circle cx="120" cy="90" r="60" fill="rgba(168,85,247,0.25)" stroke="#a855f7" strokeWidth="2" />
+          <circle cx="200" cy="90" r="60" fill="rgba(34,211,238,0.25)" stroke="#22d3ee" strokeWidth="2" />
+          <text x="80" y="90" fill="#ddd" fontSize="12">{diagram.leftLabel || 'Set A'}</text>
+          <text x="220" y="90" fill="#ddd" fontSize="12">{diagram.rightLabel || 'Set B'}</text>
+          <text x="150" y="95" fill="#fff" fontSize="12">{diagram.centerLabel || 'Common'}</text>
+        </svg>
+      </div>
+    )
+  }
+
+  if (diagram.type === 'triangle') {
+    const c = Math.sqrt(a * a + b * b).toFixed(2)
+    return (
+      <div className="bg-surface-800/80 rounded-2xl p-4 border border-primary-500/20 space-y-3">
+        <p className="text-sm text-gray-300 font-medium">{diagram.title || 'Interactive Right Triangle'}</p>
+        <svg viewBox="0 0 300 180" className="w-full h-auto bg-surface-900/40 rounded-lg">
+          <line x1="50" y1="140" x2="250" y2="140" stroke="#60a5fa" strokeWidth="2" />
+          <line x1="50" y1="140" x2="50" y2="40" stroke="#60a5fa" strokeWidth="2" />
+          <line x1="50" y1="40" x2="250" y2="140" stroke="#a855f7" strokeWidth="2" />
+          <text x="145" y="155" fill="#93c5fd" fontSize="12">a = {a}</text>
+          <text x="18" y="95" fill="#93c5fd" fontSize="12">b = {b}</text>
+          <text x="135" y="82" fill="#c084fc" fontSize="12">c ≈ {c}</text>
+        </svg>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+          <label className="text-gray-300">a: <input type="range" min="1" max="20" value={a} onChange={(e) => setA(Number(e.target.value))} className="w-full" /></label>
+          <label className="text-gray-300">b: <input type="range" min="1" max="20" value={b} onChange={(e) => setB(Number(e.target.value))} className="w-full" /></label>
+        </div>
+      </div>
+    )
+  }
+
+  if (diagram.type === 'cartesian') {
+    const toSvgX = (v) => 180 + v * 6
+    const toSvgY = (v) => 100 - v * 6
+    return (
+      <div className="bg-surface-800/80 rounded-2xl p-4 border border-primary-500/20 space-y-3">
+        <p className="text-sm text-gray-300 font-medium">{diagram.title || 'Interactive Coordinate Graph'}</p>
+        <svg viewBox="0 0 360 200" className="w-full h-auto bg-surface-900/40 rounded-lg">
+          <line x1="20" y1="100" x2="340" y2="100" stroke="#64748b" strokeWidth="1.5" />
+          <line x1="180" y1="15" x2="180" y2="185" stroke="#64748b" strokeWidth="1.5" />
+          <line x1={toSvgX(x)} y1="100" x2={toSvgX(x)} y2={toSvgY(y)} stroke="#22d3ee" strokeDasharray="4 3" />
+          <line x1="180" y1={toSvgY(y)} x2={toSvgX(x)} y2={toSvgY(y)} stroke="#22d3ee" strokeDasharray="4 3" />
+          <circle cx={toSvgX(x)} cy={toSvgY(y)} r="5" fill="#a855f7" />
+          <text x={toSvgX(x) + 8} y={toSvgY(y) - 8} fill="#e2e8f0" fontSize="12">({x}, {y})</text>
+          <text x="332" y="94" fill="#94a3b8" fontSize="11">x</text>
+          <text x="186" y="20" fill="#94a3b8" fontSize="11">y</text>
+        </svg>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+          <label className="text-gray-300">x: <input type="range" min="-20" max="20" value={x} onChange={(e) => setX(Number(e.target.value))} className="w-full" /></label>
+          <label className="text-gray-300">y: <input type="range" min="-20" max="20" value={y} onChange={(e) => setY(Number(e.target.value))} className="w-full" /></label>
+        </div>
+      </div>
+    )
+  }
+
+  return null
+}
+
+// Infer diagram from user query or AI response
+const inferDiagramFromQuery = (text = '', parsedSolution = null) => {
+  // First check if AI returned a diagram in JSON
+  if (parsedSolution?.diagram && parsedSolution.diagram.type && parsedSolution.diagram.type !== 'none') {
+    return parsedSolution.diagram
+  }
+  
+  const q = text.toLowerCase()
+  
+  // Angle detection
+  if (q.includes('angle') || q.includes('degree') || q.includes('°')) {
+    const angleMatch = text.match(/(\d+)\s*(?:°|degree)/i)
+    return {
+      type: 'angle',
+      title: `Interactive Angle`,
+      angle: angleMatch ? Number(angleMatch[1]) : 75
+    }
+  }
+  
+  if (q.includes('venn')) {
+    const vsMatch = text.match(/venn(?:\s+diagram)?(?:\s+(?:for|of|between))?\s+(.+?)\s+(?:vs|and|&)\s+(.+)/i)
+    return {
+      type: 'venn',
+      title: 'Interactive Venn Diagram',
+      leftLabel: vsMatch?.[1]?.trim() || 'Set A',
+      rightLabel: vsMatch?.[2]?.trim() || 'Set B',
+      centerLabel: 'Common'
+    }
+  }
+  
+  if (q.includes('triangle') || q.includes('pythag') || q.includes('right angle')) {
+    const aMatch = text.match(/\ba\s*=?\s*(\d+(?:\.\d+)?)/i)
+    const bMatch = text.match(/\bb\s*=?\s*(\d+(?:\.\d+)?)/i)
+    return {
+      type: 'triangle',
+      title: 'Interactive Right Triangle',
+      a: aMatch ? Number(aMatch[1]) : 6,
+      b: bMatch ? Number(bMatch[1]) : 8
+    }
+  }
+  
+  if (q.includes('graph') || q.includes('plot') || q.includes('coordinate')) {
+    const xEq = text.match(/\bx\s*=\s*(-?\d+(?:\.\d+)?)/i)
+    const yEq = text.match(/\by\s*=\s*(-?\d+(?:\.\d+)?)/i)
+    const pair = text.match(/\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)/)
+    return {
+      type: 'cartesian',
+      title: 'Interactive Coordinate Graph',
+      x: xEq ? Number(xEq[1]) : pair ? Number(pair[1]) : 4,
+      y: yEq ? Number(yEq[1]) : pair ? Number(pair[2]) : -2
+    }
+  }
+  
+  return null
+}
+
 const subjectNames = {
   math: 'Mathematics',
   physics: 'Physics',
@@ -125,20 +285,30 @@ export default function Tutor() {
       // Check if this is a math problem that needs step-by-step solving
       const isMathProblem = isMathSubject || /[0-9+\-*/=^√∫∑]/.test(input) || selectedImage
       
-      if (isMathProblem && (selectedImage || /solve|calculate|find|compute|evaluate|simplify/i.test(input) || /^[0-9x+\-*/=^√()]+$/.test(input.replace(/\s/g, '')))) {
+      if (isMathProblem && (selectedImage || /solve|calculate|find|compute|evaluate|simplify|draw|angle|triangle|graph|plot/i.test(input) || /^[0-9x+\-*/=^√()]+$/.test(input.replace(/\s/g, '')))) {
         // Use math solver mode
         const mathPrompt = `You are an expert math tutor. Solve this problem step by step.
 
-Format your response as JSON:
+CRITICAL: Return ONLY valid JSON, no markdown, no explanation outside JSON.
+
+JSON format (follow exactly):
 {
   "steps": [
-    {"description": "Step description", "math": "LaTeX math expression", "explanation": "Why we do this"}
+    {"description": "What we're doing", "math": "LaTeX expression like \\\\frac{a}{b}", "explanation": "Why this step"}
   ],
-  "solution": "Final answer",
-  "tip": {"title": "Pro tip", "content": "Helpful shortcut or insight"},
-  "fullExplanation": "Friendly explanation of the solution",
-  "followUpQuestions": ["Question 1?", "Question 2?", "Question 3?"]
+  "solution": "Final answer with units if applicable",
+  "tip": {"title": "Pro tip", "content": "Helpful shortcut"},
+  "fullExplanation": "2-3 sentence friendly summary of the solution",
+  "followUpQuestions": ["Practice question 1?", "Related concept question?", "Harder variation?"],
+  "diagram": {"type": "triangle|cartesian|venn|none", "title": "Diagram title", "a": 6, "b": 8, "x": 0, "y": 0}
 }
+
+Rules:
+- Include 3-6 steps minimum
+- Use LaTeX in "math" field (double-escape backslashes)
+- For geometry: set diagram.type to "triangle" or "cartesian"
+- For angles: describe drawing steps clearly
+- Always include followUpQuestions array
 
 Problem: ${input}`
 
@@ -180,10 +350,14 @@ Problem: ${input}`
         })
       }
 
+      // Infer diagram from query or parsed solution
+      const diagram = inferDiagramFromQuery(input, parsedSolution)
+
       const assistantMessage = {
         role: 'assistant',
         content: parsedSolution?.fullExplanation || response.content,
         solution: parsedSolution,
+        diagram: diagram,
         solveTime: solveTime
       }
 
@@ -405,6 +579,11 @@ Problem: ${input}`
                       solution={message.solution.solution}
                       tip={message.solution.tip}
                     />
+                  )}
+
+                  {/* Interactive Diagram */}
+                  {message.diagram && (
+                    <InteractiveDiagram diagram={message.diagram} />
                   )}
 
                   {/* Action buttons for math solutions */}
