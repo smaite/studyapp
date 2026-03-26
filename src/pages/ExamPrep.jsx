@@ -50,9 +50,9 @@ const RANKS = [
 ]
 
 const SKILL_LEVELS = {
-  'needs-practice': { label: 'Needs Practice', color: 'text-amber-400', bg: 'bg-amber-500/20' },
-  'building': { label: 'Building Up', color: 'text-blue-400', bg: 'bg-blue-500/20' },
-  'confident': { label: 'Confident', color: 'text-green-400', bg: 'bg-green-500/20' },
+  'needs-practice': { label: 'Weak', color: 'text-red-400', bg: 'bg-red-500/20' },
+  'building': { label: 'Learning', color: 'text-amber-400', bg: 'bg-amber-500/20' },
+  'confident': { label: 'Good', color: 'text-green-400', bg: 'bg-green-500/20' },
   'mastered': { label: 'Mastered', color: 'text-purple-400', bg: 'bg-purple-500/20' },
 }
 
@@ -91,7 +91,35 @@ const getNextRank = (xp) => {
 const getSkillLevel = (accuracy) => {
   if (accuracy >= 90) return 'mastered'
   if (accuracy >= 70) return 'confident'
-  if (accuracy >= 50) return 'building'
+  if (accuracy >= 40) return 'building'
+  return 'needs-practice'
+}
+
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
+
+const getDifficultyRank = (difficulty = 'medium') => {
+  if (difficulty === 'easy') return 1
+  if (difficulty === 'hard') return 3
+  return 2
+}
+
+const computeMasteryScore = (topicData, isCorrect, timeTakenMs = 0, retryCount = 0) => {
+  const baseMastery = typeof topicData?.mastery === 'number'
+    ? topicData.mastery
+    : topicData?.total
+      ? Math.round((topicData.correct / topicData.total) * 100)
+      : 50
+  const speedBonus = isCorrect && timeTakenMs > 0 && timeTakenMs < 15000 ? 3 : 0
+  const retryPenalty = retryCount > 0 ? Math.min(8, retryCount * 2) : 0
+  const delta = isCorrect ? 6 + speedBonus - retryPenalty : -(7 + retryPenalty)
+  return clamp(Math.round(baseMastery + delta), 0, 100)
+}
+
+// Get skill level based on mastery
+const getMasteryBand = (mastery = 0) => {
+  if (mastery >= 90) return 'mastered'
+  if (mastery >= 70) return 'confident'
+  if (mastery >= 40) return 'building'
   return 'needs-practice'
 }
 
@@ -516,10 +544,13 @@ export default function ExamPrep() {
         lastActiveDate: null,
         topicAccuracy: {}, // { "topic": { correct: 0, total: 0 } }
         achievements: [],
-        challengesWon: 0
+        challengesWon: 0,
+        dailyAnswered: 0,
+        lastDailyDate: null,
+        weeklyStats: []
       }
     } catch { 
-      return { xp: 0, totalCorrect: 0, totalAnswered: 0, streak: 0, lastActiveDate: null, topicAccuracy: {}, achievements: [], challengesWon: 0 }
+      return { xp: 0, totalCorrect: 0, totalAnswered: 0, streak: 0, lastActiveDate: null, topicAccuracy: {}, achievements: [], challengesWon: 0, dailyAnswered: 0, lastDailyDate: null, weeklyStats: [] }
     }
   })
   
@@ -568,6 +599,9 @@ export default function ExamPrep() {
   const [currentQ, setCurrentQ] = useState(0)
   const [selectedAnswer, setSelectedAnswer] = useState(null)
   const [answers, setAnswers] = useState([])
+  const [questionStartTime, setQuestionStartTime] = useState(null)
+  const [questionRetryCount, setQuestionRetryCount] = useState(0)
+  const [dailyGoal] = useState(10)
   const [showExplanation, setShowExplanation] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [assessmentResults, setAssessmentResults] = useState(null)
@@ -829,16 +863,21 @@ export default function ExamPrep() {
   const trackAnswer = (topic, isCorrect) => {
     setUserProgress(prev => {
       const topicData = prev.topicAccuracy[topic] || { correct: 0, total: 0 }
+      const updatedTopic = {
+        correct: topicData.correct + (isCorrect ? 1 : 0),
+        total: topicData.total + 1,
+        mastery: computeMasteryScore(topicData, isCorrect, 0, 0),
+        lastSeenAt: new Date().toISOString()
+      }
       return {
         ...prev,
         totalCorrect: prev.totalCorrect + (isCorrect ? 1 : 0),
         totalAnswered: prev.totalAnswered + 1,
+        dailyAnswered: (prev.dailyAnswered || 0) + 1,
+        lastDailyDate: new Date().toDateString(),
         topicAccuracy: {
           ...prev.topicAccuracy,
-          [topic]: {
-            correct: topicData.correct + (isCorrect ? 1 : 0),
-            total: topicData.total + 1
-          }
+          [topic]: updatedTopic
         }
       }
     })
@@ -847,9 +886,14 @@ export default function ExamPrep() {
   // Get topics that need more practice (accuracy < 70%)
   const getWeakTopics = () => {
     return Object.entries(userProgress.topicAccuracy)
-      .filter(([_, data]) => data.total >= 3 && (data.correct / data.total) < 0.7)
-      .map(([topic, data]) => ({ topic, accuracy: Math.round((data.correct / data.total) * 100) }))
+      .filter(([_, data]) => data.total >= 2)
+      .map(([topic, data]) => ({
+        topic,
+        accuracy: typeof data.mastery === 'number' ? data.mastery : Math.round((data.correct / data.total) * 100)
+      }))
+      .filter(t => t.accuracy < 70)
       .sort((a, b) => a.accuracy - b.accuracy)
+      .slice(0, 3)
   }
 
   useEffect(() => {
@@ -1540,9 +1584,8 @@ Be friendly and make it engaging!`
       const currentStepData = lessonContent[currentStep]
       
       // Check if this is a math/calculation problem that needs step-by-step solving
-      const isMathProblem = /solve|calculate|find|compute|evaluate|simplify|draw|angle|triangle|graph|plot|step.?by.?step|how.?to|make|construct|degree|pythag/i.test(userMsg) || 
-                           /^[0-9x+\-*/=^√()]+$/.test(userMsg.replace(/\s/g, '')) ||
-                           /[0-9+\-*/=^√∫∑]/.test(userMsg)
+      const isMathProblem = /solve|calculate|find|compute|evaluate|simplify|draw|angle|triangle|graph|plot|step.?by.?step|how.?to|construct|degree|pythag|equation|derivative|integral|factor/i.test(userMsg) || 
+                           /^[0-9x+\-*/=^√()]+$/.test(userMsg.replace(/\s/g, ''))
       
       let response
       let parsedSolution = null
@@ -1612,10 +1655,12 @@ Rules:
         
       } else {
         // Regular teaching mode
+        const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant')
         const checkPrompt = `You are teaching "${activeLesson.title}" - Step ${currentStep + 1}/${lessonContent.length}.
 
 Current topic: ${currentStepData?.title || 'Understanding'}
 Key concept to teach: ${currentStepData?.content?.substring(0, 500) || 'the lesson content'}
+Previously explained in last reply: ${lastAssistant?.content?.substring(0, 300) || 'N/A'}
 
 Student just said: "${userMsg || 'Used an attachment'}"
 ${attachmentContext}
@@ -1625,6 +1670,8 @@ IMPORTANT INSTRUCTIONS:
 2. If student gives a correct/partial answer → Praise briefly, then TEACH the next concept
 3. If student says "yes/okay/got it/understood" → TEACH MORE, don't just ask questions back
 4. NEVER just ask "Can you rephrase?" - always provide educational value
+5. DO NOT repeat the same explanation text from your previous answer. Use a new angle/example.
+6. If the student clearly indicates understanding and is ready to continue, include "READY_NEXT".
 
 Your response MUST include:
 - A clear explanation of the concept (2-3 sentences)
@@ -1659,7 +1706,8 @@ Be encouraging, use emojis, and ACTUALLY TEACH - don't just chat!`
         setStepCheckShown(prev => ({ ...prev, [currentStep]: true }))
         
         // If student understood, move to next step after a delay
-        if (aiResponse.includes('READY_NEXT') && currentStep < lessonContent.length - 1) {
+        const userReadyForNext = /^(yes|ok|okay|got it|understood|i understand|clear|next|continue|done|right|correct)$/i.test((userMsg || '').trim())
+        if ((aiResponse.includes('READY_NEXT') || userReadyForNext) && currentStep < lessonContent.length - 1) {
           setTimeout(() => {
             setCurrentStep(currentStep + 1)
             setMessages(prev => [...prev, {
