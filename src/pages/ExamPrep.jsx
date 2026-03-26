@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { 
   Upload, FileText, X, Loader2, CheckCircle, 
   Brain, Sparkles, Send, Bot, User, BookOpen, Target,
@@ -9,9 +9,10 @@ import {
   ArrowRight, Zap, Star, Menu, ChevronDown, FolderPlus, FileUp,
   Calculator, PenLine, Camera, ThumbsUp, ThumbsDown, RefreshCw,
   Flame, Award, Timer, Heart, Swords, TrendingUp,
-  Mic, MicOff, Volume2, VolumeX, Languages
+  Mic, MicOff, Volume2, VolumeX, Languages, CloudOff, Cloud
 } from 'lucide-react'
 import { sendMessage, analyzeImage } from '../services/aiService'
+import { loadAllUserData, saveUserSubject, deleteUserSubject, saveUserProgress } from '../services/userDataService'
 import voiceService from '../services/voiceService'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import MathKeyboard from '../components/MathKeyboard'
@@ -643,6 +644,12 @@ export default function ExamPrep() {
   const [publicSearchQuery, setPublicSearchQuery] = useState('')
   const [publicLanguageFilter, setPublicLanguageFilter] = useState('all')
 
+  // Supabase sync state
+  const [syncStatus, setSyncStatus] = useState('idle') // 'idle', 'syncing', 'synced', 'error'
+  const [lastSynced, setLastSynced] = useState(null)
+  const syncTimeoutRef = useRef(null)
+  const initialLoadDoneRef = useRef(false)
+
   // Filter
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
@@ -660,6 +667,80 @@ export default function ExamPrep() {
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
+
+  // Load data from Supabase on login
+  useEffect(() => {
+    if (user && !initialLoadDoneRef.current) {
+      initialLoadDoneRef.current = true
+      loadFromSupabase()
+    }
+  }, [user])
+
+  const loadFromSupabase = async () => {
+    if (!user) return
+    
+    setSyncStatus('syncing')
+    try {
+      const { subjects, progress, error } = await loadAllUserData(user.id)
+      
+      if (error) {
+        console.error('Error loading from Supabase:', error)
+        setSyncStatus('error')
+        return
+      }
+      
+      // Merge with local data - Supabase takes priority for existing, keep local-only items
+      if (subjects && subjects.length > 0) {
+        setCourses(prev => {
+          const supabaseIds = new Set(subjects.map(s => s.id))
+          const localOnly = prev.filter(c => !supabaseIds.has(c.id))
+          return [...subjects, ...localOnly]
+        })
+      }
+      
+      if (progress) {
+        setUserProgress(prev => ({
+          ...prev,
+          ...progress,
+          // Keep higher values
+          xp: Math.max(prev.xp, progress.xp || 0),
+          totalCorrect: Math.max(prev.totalCorrect, progress.totalCorrect || 0),
+          totalAnswered: Math.max(prev.totalAnswered, progress.totalAnswered || 0),
+          streak: Math.max(prev.streak, progress.streak || 0),
+        }))
+      }
+      
+      setSyncStatus('synced')
+      setLastSynced(new Date())
+    } catch (err) {
+      console.error('Sync error:', err)
+      setSyncStatus('error')
+    }
+  }
+
+  // Debounced sync to Supabase when courses change
+  const syncCourseToSupabase = useCallback(async (course) => {
+    if (!user) return
+    
+    setSyncStatus('syncing')
+    const { error } = await saveUserSubject(user.id, course)
+    if (error) {
+      setSyncStatus('error')
+    } else {
+      setSyncStatus('synced')
+      setLastSynced(new Date())
+    }
+  }, [user])
+
+  // Sync progress to Supabase (debounced)
+  const syncProgressToSupabase = useCallback(async (progress) => {
+    if (!user) return
+    
+    const { error } = await saveUserProgress(user.id, progress)
+    if (error) {
+      console.error('Progress sync error:', error)
+    }
+  }, [user])
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(courses))

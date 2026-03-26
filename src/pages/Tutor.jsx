@@ -578,7 +578,7 @@ Problem: ${input}`
                   <button
                     key={idx}
                     onClick={() => setInput(suggestion)}
-                    className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-full text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+                    className="px-3 py-2 bg-surface-800 border border-gray-700 hover:border-gray-600 rounded-xl text-sm text-gray-300 hover:text-white transition-all cursor-pointer"
                   >
                     {suggestion}
                   </button>
@@ -588,7 +588,7 @@ Problem: ${input}`
                   <button
                     key={idx}
                     onClick={() => setInput(suggestion)}
-                    className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-full text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+                    className="px-3 py-2 bg-surface-800 border border-gray-700 hover:border-gray-600 rounded-xl text-sm text-gray-300 hover:text-white transition-all cursor-pointer"
                   >
                     {suggestion}
                   </button>
@@ -604,7 +604,7 @@ Problem: ${input}`
             className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             {message.role === 'assistant' && (
-              <div className="bg-primary-500/20 p-2 rounded-xl h-fit shrink-0">
+              <div className="bg-primary-500/20 p-2 rounded-xl h-fit shrink-0 hidden md:flex">
                 <Bot className="h-5 w-5 text-primary-400" />
               </div>
             )}
@@ -709,7 +709,7 @@ Problem: ${input}`
             </div>
 
             {message.role === 'user' && (
-              <div className="bg-gray-700 p-2 rounded-xl h-fit shrink-0">
+              <div className="bg-gray-700 p-2 rounded-xl h-fit shrink-0 hidden md:flex">
                 <User className="h-5 w-5 text-gray-300" />
               </div>
             )}
@@ -718,10 +718,10 @@ Problem: ${input}`
 
         {streamingMessage && (
           <div className="flex gap-3 justify-start">
-            <div className="bg-primary-500/20 p-2 rounded-xl h-fit shrink-0">
+            <div className="bg-primary-500/20 p-2 rounded-xl h-fit shrink-0 hidden md:flex">
               <Bot className="h-5 w-5 text-primary-400" />
             </div>
-            <div className="bg-gray-800/50 rounded-2xl p-4 border border-gray-700">
+            <div className="bg-surface-800/60 rounded-2xl p-4 border border-white/5">
               <MarkdownRenderer content={streamingMessage} />
               <span className="inline-block w-2 h-4 bg-primary-500 animate-pulse ml-1" />
             </div>
@@ -730,10 +730,10 @@ Problem: ${input}`
 
         {isLoading && !streamingMessage && (
           <div className="flex gap-3 justify-start">
-            <div className="bg-primary-500/20 p-2 rounded-xl h-fit">
+            <div className="bg-primary-500/20 p-2 rounded-xl h-fit hidden md:flex">
               <Bot className="h-5 w-5 text-primary-400" />
             </div>
-            <div className="bg-gray-800/50 rounded-2xl px-4 py-3 border border-gray-700 flex items-center gap-2 text-gray-300">
+            <div className="bg-surface-800/60 rounded-2xl px-4 py-3 border border-white/5 flex items-center gap-2 text-gray-300">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>{mathMode ? 'Solving...' : 'Thinking...'}</span>
             </div>
