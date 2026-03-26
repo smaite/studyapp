@@ -939,13 +939,14 @@ export default function ExamPrep() {
       }
       
       // Create new course from shared data
-      const courseData = data.course_data
+      const courseData = data.course_data || {}
       const newCourse = {
         ...courseData,
         id: Date.now(),
         originalId: data.course_id,
         sharedFrom: data.shared_by_name,
-        lessons: courseData.lessons.map(l => ({ ...l, progress: 0, quizScore: null, completed: false })),
+        content: typeof courseData.content === 'string' ? courseData.content : '',
+        lessons: (Array.isArray(courseData.lessons) ? courseData.lessons : []).map(l => ({ ...l, progress: 0, quizScore: null, completed: false })),
         totalProgress: 0,
         needsAssessment: true
       }
@@ -1062,7 +1063,7 @@ Return ONLY valid JSON array:
         name: subjectName,
         language: courseLanguage,
         examDate: examDate || null,
-        content: allContent,
+        content: allContent || '',
         pdfPageIndex,
         lessons,
         totalProgress: 0,
@@ -1964,6 +1965,8 @@ Return ONLY valid JSON array:
     
     try {
       const shareId = `${activeCourse.id}-${Date.now()}`
+      const safeLessons = Array.isArray(activeCourse.lessons) ? activeCourse.lessons : []
+      const safeContent = typeof activeCourse.content === 'string' ? activeCourse.content : ''
       
       // Save to Supabase
       const { error } = await supabase
@@ -1975,13 +1978,13 @@ Return ONLY valid JSON array:
           shared_by_name: user.user_metadata?.full_name || user.email,
           course_data: {
             name: activeCourse.name,
-            lessons: activeCourse.lessons.map(l => ({
+            lessons: safeLessons.map(l => ({
               id: l.id,
               title: l.title,
               description: l.description,
               keyPoints: l.keyPoints
             })),
-            content: activeCourse.content.substring(0, 50000)
+            content: safeContent.substring(0, 50000)
           },
           expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
         })
@@ -2180,10 +2183,11 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
         id: Date.now(),
         originalId: subject.id,
         sharedFrom: subject.shared_by_name,
+        content: typeof courseData?.content === 'string' ? courseData.content : '',
         createdAt: new Date().toISOString(),
         totalProgress: 0,
         needsAssessment: true,
-        lessons: courseData.lessons.map(l => ({
+        lessons: (Array.isArray(courseData?.lessons) ? courseData.lessons : []).map(l => ({
           ...l,
           progress: 0,
           quizScore: null,
