@@ -265,6 +265,11 @@ const safeParseJSON = (text, fallback = []) => {
   }
 }
 
+const safeTruncate = (value, max = 0) => {
+  const s = typeof value === 'string' ? value : ''
+  return max > 0 ? s.slice(0, max) : s
+}
+
 function InteractiveDiagram({ diagram }) {
   const [a, setA] = useState(Number(diagram?.a) || 6)
   const [b, setB] = useState(Number(diagram?.b) || 8)
@@ -1032,7 +1037,7 @@ export default function ExamPrep() {
 IMPORTANT: Generate ALL content in ${courseLanguage} language.
 
 Material:
-${allContent.substring(0, 15000)}
+${safeTruncate(allContent, 15000)}
 
 Create lessons that cover ALL topics in the material. For each lesson:
 1. Give a clear, specific title (in ${courseLanguage})
@@ -1147,15 +1152,20 @@ Return ONLY valid JSON array:
       // Get existing lesson titles
       const existingLessons = activeCourse.lessons.map(l => l.title).join(', ')
       
-      const updatePrompt = `I have an existing course with these lessons: ${existingLessons}
+      const updatePrompt = `You are a strict curriculum updater.
+
+Current subject/course: ${activeCourse.name}
+Existing course lessons (this is the syllabus boundary): ${existingLessons}
 
 Here is NEW study material that was just added:
-${newContent.substring(0, 12000)}
+${safeTruncate(newContent, 12000)}
 
 Analyze this new material and:
 1. If it contains topics already covered by existing lessons, DO NOT create new lessons for them
 2. If it contains NEW topics not covered, create new lessons for them
 3. If it expands on existing topics significantly, suggest what to add
+4. DO NOT add out-of-syllabus topics unrelated to this subject
+5. Keep lesson titles aligned to this subject only (${activeCourse.name})
 
 Return a JSON object:
 {
@@ -1164,11 +1174,17 @@ Return a JSON object:
   "summary": "Brief summary of what was added"
 }
 
-Return ONLY valid JSON.`
+Return ONLY valid JSON.
+Do not include markdown, comments, trailing commas, or extra text.`
 
       const response = await sendMessage([{ role: 'user', content: updatePrompt }], activeCourse.name)
       
-      const updates = safeParseJSON(response.content, { newLessons: [], updatedLessons: [] })
+      const updates = safeParseJSON(response.content, { newLessons: [], updatedLessons: [], summary: '' })
+      const sanitizedUpdates = {
+        newLessons: Array.isArray(updates?.newLessons) ? updates.newLessons : [],
+        updatedLessons: Array.isArray(updates?.updatedLessons) ? updates.updatedLessons : [],
+        summary: typeof updates?.summary === 'string' ? updates.summary : ''
+      }
       
       // Update the course
       const updatedCourse = {
@@ -1178,8 +1194,10 @@ Return ONLY valid JSON.`
       }
       
       // Add new lessons
-      if (updates.newLessons && updates.newLessons.length > 0) {
-        const newLessonsFormatted = updates.newLessons.map((l, idx) => ({
+      if (sanitizedUpdates.newLessons.length > 0) {
+        const newLessonsFormatted = sanitizedUpdates.newLessons
+          .filter((l) => l && typeof l.title === 'string' && l.title.trim())
+          .map((l, idx) => ({
           ...l,
           id: activeCourse.lessons.length + idx + 1,
           progress: 0,
@@ -1191,8 +1209,10 @@ Return ONLY valid JSON.`
       }
       
       // Update existing lessons with new key points
-      if (updates.updatedLessons && updates.updatedLessons.length > 0) {
-        updates.updatedLessons.forEach(update => {
+      if (sanitizedUpdates.updatedLessons.length > 0) {
+        sanitizedUpdates.updatedLessons
+          .filter((update) => update && typeof update.existingTitle === 'string' && Array.isArray(update.additionalKeyPoints))
+          .forEach(update => {
           const lessonIdx = updatedCourse.lessons.findIndex(
             l => l.title.toLowerCase().includes(update.existingTitle.toLowerCase()) ||
                  update.existingTitle.toLowerCase().includes(l.title.toLowerCase())
@@ -1217,7 +1237,7 @@ Return ONLY valid JSON.`
       setActiveCourse(updatedCourse)
       
       // Show summary
-      alert(`✅ Materials added!\n\n${updates.summary || 'Course updated successfully.'}\n\n${updates.newLessons?.length || 0} new lessons added.`)
+      alert(`✅ Materials added!\n\n${sanitizedUpdates.summary || 'Course updated successfully.'}\n\n${sanitizedUpdates.newLessons.length || 0} new lessons added.`)
       
     } catch (error) {
       console.error('Error adding materials:', error)
@@ -1245,7 +1265,7 @@ Return ONLY valid JSON.`
 IMPORTANT: Generate ALL content in ${course.language || 'English'} language.
 Mix easy, medium, and hard questions covering different topics.
 
-Material: ${course.content.substring(0, 8000)}
+Material: ${safeTruncate(course.content, 8000)}
 Topics: ${course.lessons.map(l => l.title).join(', ')}
 
 Use LaTeX for math: $x^2$, $\\frac{a}{b}$
@@ -1551,9 +1571,10 @@ Return ONLY valid JSON array (no other text):
       // Generate lesson content with steps
       const prompt = `Create a structured lesson on "${lesson.title}" for a student at ${lesson.knowledgeLevel >= 70 ? 'advanced' : lesson.knowledgeLevel >= 40 ? 'intermediate' : 'beginner'} level.
 IMPORTANT: Generate ALL content in ${activeCourse.language || 'English'} language.
+STRICT SCOPE: Teach ONLY from the provided course material and key concepts. DO NOT introduce out-of-syllabus topics.
 
 Key concepts to cover: ${lesson.keyPoints.join(', ')}
-Course material: ${activeCourse.content.substring(0, 5000)}
+Course material (authoritative syllabus source): ${safeTruncate(activeCourse.content, 5000)}
 
 Create 4-5 teaching steps. Each step should:
 1. Explain ONE concept clearly with examples (in ${activeCourse.language || 'English'})
@@ -1568,7 +1589,7 @@ Return JSON array:
   "checkAnswer": "The expected answer or concept"
 }]
 
-Be friendly and make it engaging!`
+Be friendly and make it engaging, but never go beyond syllabus scope.`
 
       const response = await sendMessage([{ role: 'user', content: prompt }], activeCourse.name)
       
@@ -1697,9 +1718,10 @@ Rules:
         // Regular teaching mode
         const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant')
         const checkPrompt = `You are teaching "${activeLesson.title}" - Step ${currentStep + 1}/${lessonContent.length}.
+Subject: ${activeCourse?.name || 'General'}
 
 Current topic: ${currentStepData?.title || 'Understanding'}
-Key concept to teach: ${currentStepData?.content?.substring(0, 500) || 'the lesson content'}
+Key concept to teach: ${safeTruncate(currentStepData?.content, 500) || 'the lesson content'}
 Previously explained in last reply: ${lastAssistant?.content?.substring(0, 300) || 'N/A'}
 
 Student just said: "${userMsg || 'Used an attachment'}"
@@ -1712,6 +1734,7 @@ IMPORTANT INSTRUCTIONS:
 4. NEVER just ask "Can you rephrase?" - always provide educational value
 5. DO NOT repeat the same explanation text from your previous answer. Use a new angle/example.
 6. If the student clearly indicates understanding and is ready to continue, include "READY_NEXT".
+7. Stay strictly within syllabus: use only current lesson key concept/course material context; do not teach unrelated topics.
 
 Your response MUST include:
 - A clear explanation of the concept (2-3 sentences)
@@ -1814,7 +1837,7 @@ Be encouraging, use emojis, and ACTUALLY TEACH - don't just chat!`
 IMPORTANT: Generate ALL content in ${activeCourse.language || 'English'} language.
 
 Key concepts: ${lesson.keyPoints.join(', ')}
-Material: ${activeCourse.content.substring(0, 6000)}
+Material: ${safeTruncate(activeCourse.content, 6000)}
 Mastery: ${lesson.knowledgeLevel || 50}%
 Revision topics: ${revisionPool}
 
@@ -2044,7 +2067,7 @@ CRITICAL LANGUAGE REQUIREMENT:
 - If the source material is in a different language, translate it to ${targetLanguage}
 
 Study Material:
-${activeCourse.content.substring(0, 15000)}
+${safeTruncate(activeCourse.content, 15000)}
 
 Create lessons that cover ALL topics from the material. For each lesson:
 1. Give a clear, specific title (ONLY in ${targetLanguage})
@@ -2286,7 +2309,7 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
       return `\n\n${header}\n${relevantPages.map(p => `Source: ${p.source || 'PDF'} | Page ${p.page}\n${p.text?.substring(0, isExactPageQuery ? 4000 : 2500) || ''}`).join('\n\n---\n\n')}`
     }
     return activeCourse?.content
-      ? `\n\nCOURSE CONTEXT:\n${activeCourse.content.substring(0, 12000)}`
+      ? `\n\nCOURSE CONTEXT:\n${safeTruncate(activeCourse.content, 12000)}`
       : ''
   }
 
@@ -2493,7 +2516,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
         const userMsg = activeCourse 
           ? {
               role: 'user',
-              content: `${chatInput}\n\nRespond in ${activeCourse.language || 'English'} language.\nIf the user asks for a specific page, prioritize exact page context and cite page number in answer.${courseContext}`
+              content: `${chatInput}\n\nRespond in ${activeCourse.language || 'English'} language.\nIf the user asks for a specific page, prioritize exact page context and cite page number in answer.\nStrict rule: stay within the course syllabus/context below; if asked out of syllabus, say it's out of current syllabus and offer a related in-syllabus explanation.${courseContext}`
             }
           : { role: 'user', content: chatInput }
         apiMsgs.push(userMsg)
