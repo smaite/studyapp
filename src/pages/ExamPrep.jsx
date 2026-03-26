@@ -577,10 +577,12 @@ export default function ExamPrep() {
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef(null)
   const lessonFileInputRef = useRef(null)
+  const lessonInputRef = useRef(null)
   const [lessonAttachment, setLessonAttachment] = useState(null) // { type: 'image'|'pdf', name, data?, text? }
   const [lessonContent, setLessonContent] = useState([]) // Steps in lesson
   const [stepCheckShown, setStepCheckShown] = useState({})
   const isRestoringLessonRef = useRef(false)
+  const [copiedIndex, setCopiedIndex] = useState(null)
   const [lessonHistoryByCourse, setLessonHistoryByCourse] = useState(() => {
     try {
       const saved = localStorage.getItem(LESSON_HISTORY_KEY)
@@ -1267,6 +1269,42 @@ Return ONLY valid JSON array (no other text):
     }
     
     return { total, correct, percentage, byTopic, level, message }
+  }
+
+  // Handle clipboard paste for images in learning mode
+  const handleLessonPaste = (e) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+    
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault()
+        const file = item.getAsFile()
+        if (file) {
+          const reader = new FileReader()
+          reader.onloadend = () => {
+            setLessonAttachment({
+              type: 'image',
+              name: file.name || 'Pasted image',
+              data: reader.result
+            })
+          }
+          reader.readAsDataURL(file)
+        }
+        break
+      }
+    }
+  }
+
+  // Copy message content
+  const copyToClipboard = async (text, index) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedIndex(index)
+      setTimeout(() => setCopiedIndex(null), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
   }
 
   const startLesson = async (lesson) => {
@@ -3182,6 +3220,29 @@ Respond in ${activeCourse?.language || 'English'} language.`
                               </div>
                             </div>
                           )}
+                          {/* Copy & Feedback buttons */}
+                          <div className="flex items-center gap-2 mt-3 text-gray-500">
+                            <button 
+                              onClick={() => copyToClipboard(msg.content, i)}
+                              className="p-1.5 hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-1"
+                              title="Copy response"
+                            >
+                              {copiedIndex === i ? (
+                                <>
+                                  <Check className="h-4 w-4 text-green-500" />
+                                  <span className="text-xs text-green-500">Copied!</span>
+                                </>
+                              ) : (
+                                <Copy className="h-4 w-4" />
+                              )}
+                            </button>
+                            <button className="p-1.5 hover:bg-gray-700 rounded-lg transition-colors">
+                              <ThumbsUp className="h-4 w-4" />
+                            </button>
+                            <button className="p-1.5 hover:bg-gray-700 rounded-lg transition-colors">
+                              <ThumbsDown className="h-4 w-4" />
+                            </button>
+                          </div>
                         </>
                       )}
                       {msg.role === 'assistant' && msg.diagram && (
@@ -3285,11 +3346,13 @@ Respond in ${activeCourse?.language || 'English'} language.`
 
                 <div className="flex gap-2 sm:gap-3">
                   <input
+                    ref={lessonInputRef}
                     type="text"
                     value={interimText || input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleStepResponse()}
-                    placeholder={isListening ? (voiceLang === 'hindi' ? 'सुन रहा हूं...' : 'Listening...') : 'Type your answer or ask a question...'}
+                    onPaste={handleLessonPaste}
+                    placeholder={isListening ? (voiceLang === 'hindi' ? 'सुन रहा हूं...' : 'Listening...') : 'Type your answer or ask a question... (Ctrl+V to paste image)'}
                     className={`flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-xl px-3 sm:px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-primary-500 ${isListening ? 'text-primary-400' : ''}`}
                     disabled={isListening}
                   />

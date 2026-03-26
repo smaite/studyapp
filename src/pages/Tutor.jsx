@@ -4,7 +4,7 @@ import {
   Send, Image, Loader2, Bot, User, Sparkles, 
   Upload, X, RefreshCw, BookOpen, ChevronDown,
   Calculator, PenLine, Camera, ThumbsUp, ThumbsDown,
-  MessageSquarePlus, CheckCircle2, Grid3X3, Mic
+  MessageSquarePlus, CheckCircle2, Grid3X3, Mic, Copy, Check
 } from 'lucide-react'
 import { AppContext } from '../App'
 import { sendMessage, analyzeImage } from '../services/aiService'
@@ -202,6 +202,7 @@ export default function Tutor() {
   const [showMathKeyboard, setShowMathKeyboard] = useState(false)
   const [mathMode, setMathMode] = useState(false)
   const [solveTime, setSolveTime] = useState(null)
+  const [copiedIndex, setCopiedIndex] = useState(null)
   
   const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -228,6 +229,39 @@ export default function Tutor() {
       textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 150) + 'px'
     }
   }, [input])
+
+  // Handle clipboard paste for images
+  const handlePaste = (e) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+    
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault()
+        const file = item.getAsFile()
+        if (file) {
+          const reader = new FileReader()
+          reader.onloadend = () => {
+            setSelectedImage(reader.result)
+            setImagePreview(URL.createObjectURL(file))
+          }
+          reader.readAsDataURL(file)
+        }
+        break
+      }
+    }
+  }
+
+  // Copy message content
+  const copyToClipboard = async (text, index) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedIndex(index)
+      setTimeout(() => setCopiedIndex(null), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }
 
   const handleImageSelect = (e) => {
     const file = e.target.files[0]
@@ -613,8 +647,22 @@ Problem: ${input}`
                     <MarkdownRenderer content={message.content} />
                   </div>
 
-                  {/* Feedback */}
+                  {/* Feedback & Copy */}
                   <div className="flex items-center gap-2 text-gray-500">
+                    <button 
+                      onClick={() => copyToClipboard(message.content, index)}
+                      className="p-1.5 hover:bg-gray-800 rounded-lg transition-colors flex items-center gap-1"
+                      title="Copy response"
+                    >
+                      {copiedIndex === index ? (
+                        <>
+                          <Check className="h-4 w-4 text-green-500" />
+                          <span className="text-xs text-green-500">Copied!</span>
+                        </>
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </button>
                     <button className="p-1.5 hover:bg-gray-800 rounded-lg transition-colors">
                       <ThumbsUp className="h-4 w-4" />
                     </button>
@@ -699,6 +747,7 @@ Problem: ${input}`
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               placeholder={mathMode ? "Type a math problem..." : currentSubject ? `Ask about ${currentSubject}...` : "Ask me anything..."}
               className="w-full bg-transparent px-4 py-3 text-white placeholder-gray-500 focus:outline-none resize-none"
               rows={1}
