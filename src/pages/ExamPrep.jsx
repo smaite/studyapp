@@ -1307,6 +1307,36 @@ Return ONLY valid JSON array (no other text):
     }
   }
 
+  // Generate contextual follow-up questions based on AI response
+  const generateContextualQuestions = (content) => {
+    const lower = content.toLowerCase()
+    const questions = []
+    
+    // Check for math/calculation content
+    if (/angle|degree|°/.test(lower)) {
+      questions.push('Does this work for any angle?', 'Show me how to bisect an angle', 'What about obtuse angles?')
+    } else if (/triangle|pythag/.test(lower)) {
+      questions.push('What if it\'s not a right triangle?', 'Can you show me the proof?', 'Give me a similar problem')
+    } else if (/equation|solve|calculate/.test(lower)) {
+      questions.push('Can you explain step 2 more?', 'Give me a similar problem', 'What if the numbers are different?')
+    } else if (/formula|theorem/.test(lower)) {
+      questions.push('When do I use this formula?', 'Show me an example', 'What\'s the derivation?')
+    } else if (/graph|plot|coordinate/.test(lower)) {
+      questions.push('How do I find the slope?', 'What about negative values?', 'Show me another point')
+    } else if (/step|process|method/.test(lower)) {
+      questions.push('Can you simplify this?', 'Still not quite getting it', 'Show me another way')
+    } else if (/reaction|chemical|element/.test(lower)) {
+      questions.push('What are the products?', 'Is this exothermic?', 'Balance this equation')
+    } else if (/cell|biology|organism/.test(lower)) {
+      questions.push('What\'s the function?', 'Show me a diagram', 'Compare with other types')
+    } else {
+      // Default contextual questions based on lesson content
+      questions.push('Explain this in simpler terms', 'Give me an example', 'Quiz me on this')
+    }
+    
+    return questions
+  }
+
   const startLesson = async (lesson) => {
     setActiveLesson(lesson)
     setView('lesson-step')
@@ -3199,19 +3229,17 @@ Respond in ${activeCourse?.language || 'English'} language.`
               </div>
               
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
                 {messages.map((msg, i) => (
                   <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                     {msg.role === 'assistant' && (
-                      <div className="bg-primary-500/20 p-2 rounded-xl h-fit shrink-0">
+                      <div className="bg-primary-500/20 p-2 rounded-xl h-fit shrink-0 hidden md:flex">
                         <Bot className="h-5 w-5 text-primary-400" />
                       </div>
                     )}
-                    <div className={`max-w-[78%] sm:max-w-[85%] lg:max-w-[82%] ${
-                      msg.role === 'user' ? 'bg-primary-600 rounded-2xl rounded-br-md' : 'bg-gray-800/80 rounded-2xl rounded-bl-md'
-                    } px-5 py-4`}>
+                    <div className={`max-w-[90%] md:max-w-[85%] ${msg.role === 'user' ? '' : 'space-y-3'}`}>
                       {msg.role === 'user' ? (
-                        <>
+                        <div className="bg-primary-600 rounded-2xl rounded-br-md px-4 py-3">
                           {msg.attachment?.type === 'image' && msg.attachment?.data && (
                             <img src={msg.attachment.data} alt={msg.attachment.name || 'Attachment'} className="max-h-40 rounded-lg mb-2" />
                           )}
@@ -3222,10 +3250,14 @@ Respond in ${activeCourse?.language || 'English'} language.`
                             </div>
                           )}
                           <p className="text-gray-100">{msg.content}</p>
-                        </>
+                        </div>
                       ) : (
                         <>
-                          <MarkdownRenderer content={msg.content} />
+                          {/* Main content - cleaner card like Astra AI */}
+                          <div className="bg-surface-800/60 rounded-2xl p-4 border border-white/5">
+                            <MarkdownRenderer content={msg.content} />
+                          </div>
+                          
                           {/* Step-by-step solution display */}
                           {msg.solution?.steps?.length > 0 && (
                             <SolvingSteps 
@@ -3234,25 +3266,27 @@ Respond in ${activeCourse?.language || 'English'} language.`
                               tip={msg.solution.tip}
                             />
                           )}
-                          {/* Follow-up questions from solution */}
-                          {msg.solution?.followUpQuestions?.length > 0 && (
-                            <div className="mt-4 pt-3 border-t border-gray-700/50">
-                              <p className="text-xs text-gray-400 mb-2">Try these next:</p>
-                              <div className="flex flex-wrap gap-2">
-                                {msg.solution.followUpQuestions.map((q, qi) => (
-                                  <button
-                                    key={qi}
-                                    onClick={() => setInput(q)}
-                                    className="px-2 py-1 rounded text-xs bg-primary-500/10 border border-primary-500/20 hover:border-primary-500/40 text-primary-300"
-                                  >
-                                    {q}
-                                  </button>
-                                ))}
+                          
+                          {/* Interactive Diagram */}
+                          {msg.diagram && (
+                            <InteractiveDiagram diagram={msg.diagram} />
+                          )}
+                          
+                          {/* Quick Tip box - styled like Astra AI */}
+                          {msg.solution?.tip && (
+                            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                              <div className="flex items-start gap-2">
+                                <span className="text-amber-400 text-lg">💡</span>
+                                <div>
+                                  <p className="font-medium text-amber-300 text-sm">{msg.solution.tip.title || 'Quick Math'}</p>
+                                  <p className="text-gray-300 text-sm mt-1">{msg.solution.tip.content}</p>
+                                </div>
                               </div>
                             </div>
                           )}
-                          {/* Copy & Feedback buttons */}
-                          <div className="flex items-center gap-2 mt-3 text-gray-500">
+                          
+                          {/* Feedback buttons - minimal */}
+                          <div className="flex items-center gap-2 text-gray-500">
                             <button 
                               onClick={() => copyToClipboard(msg.content, i)}
                               className="p-1.5 hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-1"
@@ -3274,16 +3308,26 @@ Respond in ${activeCourse?.language || 'English'} language.`
                               <ThumbsDown className="h-4 w-4" />
                             </button>
                           </div>
+                          
+                          {/* Contextual follow-up buttons - Astra AI style - only on last message */}
+                          {i === messages.length - 1 && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {(msg.solution?.followUpQuestions || generateContextualQuestions(msg.content)).slice(0, 3).map((q, qi) => (
+                                <button
+                                  key={qi}
+                                  onClick={() => setInput(q)}
+                                  className="px-3 py-2 bg-surface-800 border border-gray-700 hover:border-gray-600 rounded-xl text-sm text-gray-300 hover:text-white transition-all cursor-pointer"
+                                >
+                                  {q}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </>
-                      )}
-                      {msg.role === 'assistant' && msg.diagram && (
-                        <div className="mt-3">
-                          <InteractiveDiagram diagram={msg.diagram} />
-                        </div>
                       )}
                     </div>
                     {msg.role === 'user' && (
-                      <div className="bg-gray-700 p-2 rounded-xl h-fit shrink-0">
+                      <div className="bg-gray-700 p-2 rounded-xl h-fit shrink-0 hidden md:flex">
                         <User className="h-5 w-5" />
                       </div>
                     )}
@@ -3308,7 +3352,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
               </div>
               
               {/* Input */}
-              <div className="p-4 border-t border-gray-800 bg-gray-900/50">
+              <div className="p-3 md:p-4 border-t border-gray-800 bg-gray-900/50">
                 {lessonContent[currentStep]?.checkQuestion && !stepCheckShown[currentStep] && (
                   <div className="bg-primary-500/10 border border-primary-500/30 rounded-xl p-3 mb-3">
                     <div className="text-sm text-primary-300 flex items-start gap-2">
@@ -3317,23 +3361,6 @@ Respond in ${activeCourse?.language || 'English'} language.`
                     </div>
                   </div>
                 )}
-
-                <div className="flex flex-wrap gap-2 mb-3">
-                    {[
-                      lessonContent[currentStep]?.checkQuestion ? cleanEscapedText(lessonContent[currentStep].checkQuestion) : `Explain ${lessonContent[currentStep]?.title || 'this step'} in simple words`,
-                      'Give me a similar question',
-                      'Explain this with an example',
-                      `Summarize ${lessonContent[currentStep]?.title || 'this topic'} in 3 points`
-                    ].filter(Boolean).map((q, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setInput(q)}
-                        className="max-w-full whitespace-normal break-words px-3 py-1.5 rounded-lg text-xs bg-surface-800 border border-primary-500/20 hover:border-primary-500/40 text-gray-300 cursor-pointer"
-                      >
-                        {q}
-                      </button>
-                    ))}
-                </div>
                 
                 {lessonAttachment && (
                   <div className="mb-3">
@@ -3347,35 +3374,8 @@ Respond in ${activeCourse?.language || 'English'} language.`
                   </div>
                 )}
 
-                <div className="flex items-center justify-end gap-2 mb-2">
-                  <button
-                    onClick={toggleVoiceLang}
-                    className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
-                    title="Toggle language"
-                  >
-                    <Languages className="h-3.5 w-3.5" />
-                    <span>{voiceLang === 'english' ? 'EN' : 'हि'}</span>
-                  </button>
-                  <button
-                    onClick={() => setVoiceEnabled(!voiceEnabled)}
-                    className={`p-1.5 rounded-lg transition-colors ${voiceEnabled ? 'text-primary-400 bg-primary-500/20' : 'text-gray-500 bg-gray-800'}`}
-                    title={voiceEnabled ? 'Disable auto-speak' : 'Enable auto-speak'}
-                  >
-                    {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-                  </button>
-                  {isSpeaking && (
-                    <button
-                      onClick={stopSpeaking}
-                      className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-red-500/20 text-red-300 hover:bg-red-500/30 transition-colors"
-                      title="Stop reading"
-                    >
-                      <VolumeX className="h-3.5 w-3.5" />
-                      <span>Stop</span>
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex gap-2 sm:gap-3">
+                {/* Input area - Astra AI style */}
+                <div className="bg-surface-800 rounded-2xl border border-gray-700/50 focus-within:border-primary-500/50 transition-colors">
                   <input
                     ref={lessonInputRef}
                     type="text"
@@ -3383,34 +3383,58 @@ Respond in ${activeCourse?.language || 'English'} language.`
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleStepResponse()}
                     onPaste={handleLessonPaste}
-                    placeholder={isListening ? (voiceLang === 'hindi' ? 'सुन रहा हूं...' : 'Listening...') : 'Type your answer or ask a question... (Ctrl+V to paste image)'}
-                    className={`flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-xl px-3 sm:px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-primary-500 ${isListening ? 'text-primary-400' : ''}`}
+                    placeholder="Ask, speak, or send a file"
+                    className={`w-full bg-transparent px-4 py-3 text-white placeholder-gray-500 focus:outline-none text-sm md:text-base ${isListening ? 'text-primary-400' : ''}`}
                     disabled={isListening}
                   />
-                  <input type="file" ref={lessonFileInputRef} onChange={handleLessonAttachmentUpload} accept="image/*,application/pdf" className="hidden" />
-                  <button
-                    onClick={() => lessonFileInputRef.current?.click()}
-                    className="bg-gray-800 hover:bg-gray-700 p-2 sm:p-3 rounded-xl"
-                    title="Attach image or PDF"
-                  >
-                    <FileUp className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={() => toggleVoiceListening('lesson')}
-                    className={`p-2 sm:p-3 rounded-xl transition-all ${
-                      isListening ? 'text-red-400 bg-red-500/20 animate-pulse' : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
-                    }`}
-                    title={isListening ? 'Stop listening' : 'Start voice input'}
-                  >
-                    {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-                  </button>
-                  <button 
-                    onClick={handleStepResponse}
-                    disabled={(!input.trim() && !lessonAttachment) || isLoading}
-                    className="bg-primary-600 hover:bg-primary-500 disabled:opacity-50 p-2 sm:p-3 rounded-xl"
-                  >
-                    <Send className="h-5 w-5" />
-                  </button>
+                  
+                  <div className="flex items-center justify-between px-3 pb-3">
+                    <div className="flex items-center gap-1">
+                      <input type="file" ref={lessonFileInputRef} onChange={handleLessonAttachmentUpload} accept="image/*,application/pdf" className="hidden" />
+                      <button
+                        onClick={() => lessonFileInputRef.current?.click()}
+                        className="p-2 text-gray-400 hover:text-white hover:bg-gray-700/50 rounded-lg transition-colors"
+                        title="Attach image or PDF (Ctrl+V to paste)"
+                      >
+                        <Camera className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={toggleVoiceLang}
+                        className="p-2 text-gray-400 hover:text-white hover:bg-gray-700/50 rounded-lg transition-colors"
+                        title={`Language: ${voiceLang === 'english' ? 'English' : 'Hindi'}`}
+                      >
+                        <Languages className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {isSpeaking && (
+                        <button
+                          onClick={stopSpeaking}
+                          className="px-2 py-1 text-xs rounded-lg bg-red-500/20 text-red-300 hover:bg-red-500/30 transition-colors"
+                        >
+                          Stop
+                        </button>
+                      )}
+                      <span className="text-xs text-gray-500 hidden md:block">Speak</span>
+                      <button
+                        onClick={() => toggleVoiceListening('lesson')}
+                        className={`p-2 rounded-lg transition-all ${
+                          isListening ? 'text-red-400 bg-red-500/20 animate-pulse' : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                        }`}
+                        title={isListening ? 'Stop listening' : 'Start voice input'}
+                      >
+                        {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                      </button>
+                      <button 
+                        onClick={handleStepResponse}
+                        disabled={(!input.trim() && !lessonAttachment) || isLoading}
+                        className="p-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white rounded-lg transition-colors"
+                      >
+                        <Send className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

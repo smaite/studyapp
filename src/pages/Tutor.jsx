@@ -263,6 +263,32 @@ export default function Tutor() {
     }
   }
 
+  // Generate contextual follow-up questions based on AI response
+  const generateContextualQuestions = (content) => {
+    const lower = content.toLowerCase()
+    const questions = []
+    
+    // Check for math/calculation content
+    if (/angle|degree|°/.test(lower)) {
+      questions.push('Does this work for any angle?', 'Show me how to bisect an angle', 'What about obtuse angles?')
+    } else if (/triangle|pythag/.test(lower)) {
+      questions.push('What if it\'s not a right triangle?', 'Can you show me the proof?', 'Give me a similar problem')
+    } else if (/equation|solve|calculate/.test(lower)) {
+      questions.push('Can you explain step 2 more?', 'Give me a similar problem', 'What if the numbers are different?')
+    } else if (/formula|theorem/.test(lower)) {
+      questions.push('When do I use this formula?', 'Show me an example', 'What\'s the derivation?')
+    } else if (/graph|plot|coordinate/.test(lower)) {
+      questions.push('How do I find the slope?', 'What about negative values?', 'Show me another point')
+    } else if (/step|process|method/.test(lower)) {
+      questions.push('Can you simplify this?', 'Still not quite getting it', 'Show me another way')
+    } else {
+      // Default contextual questions
+      questions.push('Can you explain more?', 'Give me an example', 'Quiz me on this')
+    }
+    
+    return questions
+  }
+
   const handleImageSelect = (e) => {
     const file = e.target.files[0]
     if (file) {
@@ -583,7 +609,7 @@ Problem: ${input}`
               </div>
             )}
             
-            <div className={`max-w-[85%] ${message.role === 'user' ? '' : 'space-y-4'}`}>
+            <div className={`max-w-[90%] md:max-w-[85%] ${message.role === 'user' ? '' : 'space-y-3'}`}>
               {message.role === 'user' ? (
                 <div className="bg-primary-600 text-white rounded-2xl rounded-br-md px-4 py-3">
                   {message.image && (
@@ -622,32 +648,25 @@ Problem: ${input}`
                     <InteractiveDiagram diagram={message.diagram} />
                   )}
 
-                  {/* Action buttons for math solutions */}
-                  {message.solution && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <button 
-                        onClick={() => handleFollowUp('Give me a similar problem to practice')}
-                        className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-full text-sm text-gray-300 transition-colors"
-                      >
-                        <RefreshCw className="h-4 w-4" />
-                        Similar problem
-                      </button>
-                      <button 
-                        onClick={clearChat}
-                        className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-full text-sm text-gray-300 transition-colors"
-                      >
-                        <MessageSquarePlus className="h-4 w-4" />
-                        New chat
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Explanation */}
-                  <div className="bg-gray-800/50 rounded-2xl p-4 border border-gray-700">
+                  {/* Main content - cleaner card */}
+                  <div className="bg-surface-800/60 rounded-2xl p-4 border border-white/5">
                     <MarkdownRenderer content={message.content} />
                   </div>
 
-                  {/* Feedback & Copy */}
+                  {/* Quick Tip box - styled like Astra AI */}
+                  {message.solution?.tip && (
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                      <div className="flex items-start gap-2">
+                        <span className="text-amber-400 text-lg">💡</span>
+                        <div>
+                          <p className="font-medium text-amber-300 text-sm">{message.solution.tip.title || 'Quick Math'}</p>
+                          <p className="text-gray-300 text-sm mt-1">{message.solution.tip.content}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Feedback & Copy - minimal */}
                   <div className="flex items-center gap-2 text-gray-500">
                     <button 
                       onClick={() => copyToClipboard(message.content, index)}
@@ -671,14 +690,14 @@ Problem: ${input}`
                     </button>
                   </div>
 
-                  {/* Follow-up questions */}
-                  {message.solution?.followUpQuestions && (
-                    <div className="space-y-2">
-                      {message.solution.followUpQuestions.map((q, i) => (
+                  {/* Contextual follow-up buttons - Astra AI style */}
+                  {index === messages.length - 1 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {(message.solution?.followUpQuestions || generateContextualQuestions(message.content)).slice(0, 3).map((q, i) => (
                         <button
                           key={i}
                           onClick={() => handleFollowUp(q)}
-                          className="block w-full text-left px-4 py-3 bg-gray-800/50 hover:bg-gray-800 border border-gray-700 rounded-xl text-gray-300 text-sm transition-colors"
+                          className="px-3 py-2 bg-surface-800 border border-gray-700 hover:border-gray-600 rounded-xl text-sm text-gray-300 hover:text-white transition-all cursor-pointer"
                         >
                           {q}
                         </button>
@@ -740,16 +759,16 @@ Problem: ${input}`
           </div>
         )}
 
-        <div className="p-4">
-          <div className="bg-gray-800 rounded-2xl border border-gray-700 focus-within:border-primary-500 transition-colors">
+        <div className="p-3 md:p-4">
+          <div className="bg-surface-800 rounded-2xl border border-gray-700/50 focus-within:border-primary-500/50 transition-colors">
             <textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
-              placeholder={mathMode ? "Type a math problem..." : currentSubject ? `Ask about ${currentSubject}...` : "Ask me anything..."}
-              className="w-full bg-transparent px-4 py-3 text-white placeholder-gray-500 focus:outline-none resize-none"
+              placeholder="Ask, speak, or send a file"
+              className="w-full bg-transparent px-4 py-3 text-white placeholder-gray-500 focus:outline-none resize-none text-sm md:text-base"
               rows={1}
             />
             
@@ -765,8 +784,8 @@ Problem: ${input}`
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
-                  title="Upload image"
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700/50 rounded-lg transition-colors"
+                  title="Upload image (or Ctrl+V to paste)"
                 >
                   <Camera className="h-5 w-5" />
                 </button>
@@ -777,7 +796,7 @@ Problem: ${input}`
                     className={`p-2 rounded-lg transition-colors ${
                       showMathKeyboard 
                         ? 'text-primary-400 bg-primary-500/20' 
-                        : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                        : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
                     }`}
                     title="Math keyboard"
                   >
@@ -786,17 +805,27 @@ Problem: ${input}`
                 )}
               </div>
 
-              <button
-                onClick={handleSubmit}
-                disabled={(!input.trim() && !selectedImage) || isLoading}
-                className="p-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <Send className="h-5 w-5" />
-                )}
-              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 hidden md:block">Speak</span>
+                <button
+                  type="button"
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700/50 rounded-lg transition-colors"
+                  title="Voice input"
+                >
+                  <Mic className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={(!input.trim() && !selectedImage) || isLoading}
+                  className="p-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Send className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
           
