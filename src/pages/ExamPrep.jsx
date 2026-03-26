@@ -601,6 +601,7 @@ export default function ExamPrep() {
   const [answers, setAnswers] = useState([])
   const [questionStartTime, setQuestionStartTime] = useState(null)
   const [questionRetryCount, setQuestionRetryCount] = useState(0)
+  const [answerChanges, setAnswerChanges] = useState(0)
   const [dailyGoal] = useState(10)
   const [showExplanation, setShowExplanation] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -839,6 +840,12 @@ export default function ExamPrep() {
     } else {
       setUserProgress(prev => ({ ...prev, lastActiveDate: today, streak: 1 }))
     }
+    setUserProgress(prev => {
+      if (prev.lastDailyDate !== today) {
+        return { ...prev, dailyAnswered: 0, lastDailyDate: today }
+      }
+      return prev
+    })
   }, [])
 
   // Award XP with animation
@@ -1227,10 +1234,13 @@ Return ONLY valid JSON.`
     setCurrentQ(0)
     setAnswers([])
     setSelectedAnswer(null)
+    setQuestionStartTime(Date.now())
+    setQuestionRetryCount(0)
+    setAnswerChanges(0)
     setShowExplanation(false)
     
     try {
-      const prompt = `Create 10 assessment questions to test the student's existing knowledge of this material.
+      const prompt = `Create 8 assessment questions (max 10) to quickly test the student's existing knowledge of this material.
 IMPORTANT: Generate ALL content in ${course.language || 'English'} language.
 Mix easy, medium, and hard questions covering different topics.
 
@@ -1247,7 +1257,7 @@ Return ONLY valid JSON array (no other text):
       const parsed = safeParseJSON(response.content, [])
       if (!parsed || parsed.length === 0) throw new Error('No questions generated')
       
-      setQuestions(parsed.slice(0, 10).map(q => ({
+      setQuestions(parsed.slice(0, 8).map(q => ({
         ...q,
         question: cleanEscapedText(q.question),
         options: (q.options || ['A', 'B', 'C', 'D']).map((opt, i) => formatOptionText(opt, i)),
@@ -1298,7 +1308,11 @@ Return ONLY valid JSON array (no other text):
 
   const handleAssessmentAnswer = (idx) => {
     if (showExplanation) return
+    if (selectedAnswer !== null && selectedAnswer !== idx) {
+      setAnswerChanges(prev => prev + 1)
+    }
     setSelectedAnswer(idx)
+    if (!questionStartTime) setQuestionStartTime(Date.now())
   }
 
   const submitAssessmentAnswer = () => {
@@ -1306,6 +1320,8 @@ Return ONLY valid JSON array (no other text):
     
     const currentQuestion = questions[currentQ]
     const isSelfAssessment = currentQuestion.isSelfAssessment
+    const elapsedMs = questionStartTime ? Date.now() - questionStartTime : 0
+    const retryCount = questionRetryCount + answerChanges
     
     // For self-assessment questions, map answer to knowledge level
     let isCorrect = selectedAnswer === currentQuestion.correct
@@ -1320,11 +1336,13 @@ Return ONLY valid JSON array (no other text):
     setAnswers([...answers, { 
       selected: selectedAnswer, 
       correct: isCorrect,
-      topic: currentQuestion.topic,
-      difficulty: currentQuestion.difficulty,
-      isSelfAssessment,
-      knowledgeFromAnswer
-    }])
+        topic: currentQuestion.topic,
+        difficulty: currentQuestion.difficulty,
+        isSelfAssessment,
+        knowledgeFromAnswer,
+        timeTakenMs: elapsedMs,
+        retryCount: questionRetryCount + answerChanges
+      }])
     setShowExplanation(true)
   }
 
@@ -1332,6 +1350,7 @@ Return ONLY valid JSON array (no other text):
     if (currentQ < questions.length - 1) {
       setCurrentQ(currentQ + 1)
       setSelectedAnswer(null)
+      setAnswerChanges(0)
       setShowExplanation(false)
     } else {
       // Assessment complete - calculate results
@@ -1343,13 +1362,15 @@ Return ONLY valid JSON array (no other text):
         isSelfAssessment: questions[currentQ].isSelfAssessment,
         knowledgeFromAnswer: questions[currentQ].isSelfAssessment 
           ? [100, 70, 40, 10][selectedAnswer] || 50 
-          : null
+          : null,
+        timeTakenMs: questionStartTime ? Date.now() - questionStartTime : 0,
+        retryCount: questionRetryCount + answerChanges
       }]
       
       const results = calculateAssessmentResults(allAnswers)
       setAssessmentResults(results)
       
-      // Update course with knowledge levels
+      // Update course with knowledge levels and weak topics
       const updated = { ...activeCourse, needsAssessment: false }
       updated.lessons = updated.lessons.map(lesson => {
         const topicAnswers = allAnswers.filter(a => 
@@ -1371,6 +1392,12 @@ Return ONLY valid JSON array (no other text):
           knowledgeLevel: total > 0 ? Math.round((correct / total) * 100) : 50
         }
       })
+      const weakTopics = Object.entries(results.byTopic)
+        .map(([topic, data]) => ({ topic, mastery: data.mastery ?? Math.round((data.correct / Math.max(1, data.total)) * 100) }))
+        .sort((a, b) => a.mastery - b.mastery)
+        .slice(0, 3)
+      updated.weakTopics = weakTopics
+      updated.assignedLevel = results.level
       
       setCourses(prev => prev.map(c => c.id === activeCourse.id ? updated : c))
       setActiveCourse(updated)
@@ -1399,21 +1426,33 @@ Return ONLY valid JSON array (no other text):
     const byTopic = {}
     allAnswers.forEach((a, i) => {
       const topic = questions[i]?.topic || 'General'
-      if (!byTopic[topic]) byTopic[topic] = { correct: 0, total: 0, knowledge: null }
+      if (!byTopic[topic]) byTopic[topic] = { correct: 0, total: 0, knowledge: null, totalTimeMs: 0, retries: 0, weightedDifficulty: 0 }
       byTopic[topic].total++
       if (a.correct) byTopic[topic].correct++
       if (a.knowledgeFromAnswer !== null) byTopic[topic].knowledge = a.knowledgeFromAnswer
+      byTopic[topic].totalTimeMs += a.timeTakenMs || 0
+      byTopic[topic].retries += a.retryCount || 0
+      byTopic[topic].weightedDifficulty += getDifficultyRank(a.difficulty)
+    })
+    Object.values(byTopic).forEach((topic) => {
+      const accuracy = topic.total > 0 ? Math.round((topic.correct / topic.total) * 100) : 0
+      const avgTime = topic.total > 0 ? topic.totalTimeMs / topic.total : 0
+      const speedBonus = avgTime > 0 && avgTime < 14000 ? 4 : 0
+      const retryPenalty = Math.min(10, topic.retries * 2)
+      topic.mastery = clamp(Math.round((topic.knowledge ?? accuracy) + speedBonus - retryPenalty), 0, 100)
     })
     
     // Determine skill level
     let level = 'Beginner'
     let message = 'Great starting point! I\'ll teach you everything from the basics.'
     if (percentage >= 80) {
-      level = 'Advanced'
+      level = 'Level 10+ (Advanced)'
       message = 'Impressive! You already know a lot. I\'ll focus on advanced concepts and practice.'
     } else if (percentage >= 50) {
-      level = 'Intermediate'
+      level = 'Level 5+ (Intermediate)'
       message = 'Good foundation! I\'ll help you strengthen your understanding.'
+    } else {
+      level = 'Level 1 (Basics)'
     }
     
     return { total, correct, percentage, byTopic, level, message }
@@ -1768,17 +1807,24 @@ Be encouraging, use emojis, and ACTUALLY TEACH - don't just chat!`
     setShowExplanation(false)
     
     try {
+      const weakTopics = (activeCourse?.weakTopics || []).map(w => w.topic)
+      const revisionPool = weakTopics.length ? weakTopics.join(', ') : lesson.title
       const prompt = `Create 5 quiz questions about "${lesson.title}".
 IMPORTANT: Generate ALL content in ${activeCourse.language || 'English'} language.
 
 Key concepts: ${lesson.keyPoints.join(', ')}
 Material: ${activeCourse.content.substring(0, 6000)}
+Mastery: ${lesson.knowledgeLevel || 50}%
+Revision topics: ${revisionPool}
 
 Make questions test real understanding, not just memorization.
+Mix difficulty with adaptive ratio:
+- 70% new questions from current lesson
+- 30% revision from weak topics
 Use LaTeX for math: $x^2$, $\\frac{a}{b}$
 
 Return ONLY valid JSON array:
-[{"question":"...","options":["A) ...","B) ...","C) ...","D) ..."],"correct":0,"explanation":"..."}]`
+[{"question":"...","options":["A) ...","B) ...","C) ...","D) ..."],"correct":0,"explanation":"...","topic":"...","difficulty":"easy|medium|hard"}]`
 
       const response = await sendMessage([{ role: 'user', content: prompt }], activeCourse.name)
       
@@ -1789,8 +1835,12 @@ Return ONLY valid JSON array:
         ...q,
         question: cleanEscapedText(q.question),
         options: (q.options || ['A', 'B', 'C', 'D']).map((opt, i) => formatOptionText(opt, i)),
-        explanation: cleanEscapedText(q.explanation || '')
+        explanation: cleanEscapedText(q.explanation || ''),
+        topic: q.topic || lesson.title,
+        difficulty: q.difficulty || 'medium'
       })))
+      setQuestionStartTime(Date.now())
+      setQuestionRetryCount(0)
     } catch (error) {
       console.error('Quiz error:', error)
       setQuestions([{ question: 'Error generating questions. Try again?', options: ['Retry', 'Go back', 'Skip', 'Help'], correct: 0, explanation: '' }])
@@ -1801,19 +1851,49 @@ Return ONLY valid JSON array:
 
   const handleQuizAnswer = (idx) => {
     if (showExplanation) return
+    if (selectedAnswer !== null && selectedAnswer !== idx) {
+      setAnswerChanges(prev => prev + 1)
+    }
     setSelectedAnswer(idx)
+    if (!questionStartTime) setQuestionStartTime(Date.now())
   }
 
   const submitQuizAnswer = () => {
     if (selectedAnswer === null) return
     const isCorrect = selectedAnswer === questions[currentQ].correct
     const topic = activeLesson?.title || activeCourse?.name || 'General'
+    const elapsedMs = questionStartTime ? Date.now() - questionStartTime : 0
     
-    setAnswers([...answers, { selected: selectedAnswer, correct: isCorrect }])
+    setAnswers([...answers, { selected: selectedAnswer, correct: isCorrect, timeTakenMs: elapsedMs, retryCount }])
     setShowExplanation(true)
     
     // Track and award XP
-    trackAnswer(topic, isCorrect)
+    setUserProgress(prev => {
+      const topicData = prev.topicAccuracy[topic] || { correct: 0, total: 0, mastery: 50 }
+      const mastery = computeMasteryScore(topicData, isCorrect, elapsedMs, retryCount)
+      return {
+        ...prev,
+        totalCorrect: prev.totalCorrect + (isCorrect ? 1 : 0),
+        totalAnswered: prev.totalAnswered + 1,
+        dailyAnswered: (prev.dailyAnswered || 0) + 1,
+        lastDailyDate: new Date().toDateString(),
+        topicAccuracy: {
+          ...prev.topicAccuracy,
+          [topic]: {
+            correct: (topicData.correct || 0) + (isCorrect ? 1 : 0),
+            total: (topicData.total || 0) + 1,
+            mastery,
+            lastSeenAt: new Date().toISOString()
+          }
+        },
+        weeklyStats: [...(prev.weeklyStats || []).slice(-6), {
+          date: new Date().toISOString(),
+          topic,
+          correct: isCorrect,
+          timeTakenMs: elapsedMs
+        }]
+      }
+    })
     
     if (isCorrect) {
       awardXP(XP_REWARDS.correctAnswer, '✅ Correct!')
@@ -1832,9 +1912,18 @@ Return ONLY valid JSON array:
 
   const nextQuizQuestion = () => {
     if (currentQ < questions.length - 1) {
+      const wasCorrect = answers[currentQ]?.correct
+      const currentDifficulty = questions[currentQ]?.difficulty || 'medium'
+      const adjustedDifficulty = wasCorrect
+        ? (currentDifficulty === 'easy' ? 'medium' : 'hard')
+        : (currentDifficulty === 'hard' ? 'medium' : 'easy')
       setCurrentQ(currentQ + 1)
       setSelectedAnswer(null)
       setShowExplanation(false)
+      setQuestionRetryCount(0)
+      setAnswerChanges(0)
+      setQuestionStartTime(Date.now())
+      setQuestions(prev => prev.map((q, i) => i === currentQ + 1 ? { ...q, difficulty: adjustedDifficulty } : q))
     } else {
       // Quiz complete
       const score = answers.filter(a => a.correct).length
@@ -2761,6 +2850,16 @@ Respond in ${activeCourse?.language || 'English'} language.`
                     </div>
                   </div>
                 )}
+
+                {/* Daily goal / streak */}
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+                  <div className="px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-300">
+                    Daily Goal: {Math.min(userProgress.dailyAnswered || 0, dailyGoal)}/{dailyGoal}
+                  </div>
+                  <div className="px-3 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-300">
+                    Streak: {userProgress.streak || 0} days
+                  </div>
+                </div>
               </div>
               
               {/* Focus Areas - Neon Warning */}
@@ -3234,6 +3333,11 @@ Respond in ${activeCourse?.language || 'English'} language.`
                           {answers[currentQ]?.correct ? '✓ Correct!' : '✗ Not quite'}
                         </p>
                         <MarkdownRenderer content={cleanEscapedText(questions[currentQ]?.explanation)} />
+                        {!answers[currentQ]?.correct && (
+                          <p className="text-xs md:text-sm text-amber-300 mt-2">
+                            What went wrong: your choice did not match the concept. Correct method shown above. Try the next one with a simpler step-by-step approach.
+                          </p>
+                        )}
                       </div>
                     )}
                     
@@ -3781,11 +3885,11 @@ Respond in ${activeCourse?.language || 'English'} language.`
                     <h2 className="text-2xl font-bold mb-2">Great Start! 🎉</h2>
                     <p className="text-gray-400 mb-6">{assessmentResults.message}</p>
                     
-                    <div className="text-left bg-surface-700/50 rounded-xl p-4 mb-6">
-                      <h3 className="font-medium mb-3 flex items-center gap-2">
-                        <TrendingUp className="h-5 w-5 text-primary-400" />
-                        Your Skill Breakdown
-                      </h3>
+                      <div className="text-left bg-surface-700/50 rounded-xl p-4 mb-6">
+                        <h3 className="font-medium mb-3 flex items-center gap-2">
+                          <TrendingUp className="h-5 w-5 text-primary-400" />
+                          Your Skill Breakdown
+                        </h3>
                       <div className="space-y-3">
                         {Object.entries(assessmentResults.byTopic).map(([topic, data]) => {
                           const accuracy = Math.round((data.correct / data.total) * 100)
@@ -3812,6 +3916,19 @@ Respond in ${activeCourse?.language || 'English'} language.`
                           )
                         })}
                       </div>
+
+                      {(activeCourse?.weakTopics?.length || 0) > 0 && (
+                        <div className="text-left bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-6">
+                          <h3 className="font-medium mb-2 text-amber-300">Focus next (top weak topics)</h3>
+                          <div className="flex flex-wrap gap-2">
+                            {activeCourse.weakTopics.slice(0, 3).map((w) => (
+                              <span key={w.topic} className="px-2 py-1 rounded-lg text-xs bg-amber-500/20 text-amber-200">
+                                {w.topic} · {w.mastery}%
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     
                     <button 
