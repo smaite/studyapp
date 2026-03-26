@@ -241,8 +241,40 @@ function InteractiveDiagram({ diagram }) {
   const [b, setB] = useState(Number(diagram?.b) || 8)
   const [x, setX] = useState(Number(diagram?.x) || 4)
   const [y, setY] = useState(Number(diagram?.y) || -2)
+  const [angle, setAngle] = useState(Number(diagram?.angle) || 75)
 
-  if (!diagram) return null
+  if (!diagram || diagram.type === 'none') return null
+
+  if (diagram.type === 'angle') {
+    const radians = (angle * Math.PI) / 180
+    const length = 100
+    const endX = 50 + length * Math.cos(radians)
+    const endY = 150 - length * Math.sin(radians)
+    return (
+      <div className="bg-surface-800/80 rounded-2xl p-4 border border-primary-500/20 space-y-3">
+        <p className="text-sm text-gray-300 font-medium">{diagram.title || `Interactive ${angle}° Angle`}</p>
+        <svg viewBox="0 0 250 180" className="w-full h-auto bg-surface-900/40 rounded-lg">
+          {/* Base line */}
+          <line x1="50" y1="150" x2="200" y2="150" stroke="#60a5fa" strokeWidth="2" />
+          {/* Angle line */}
+          <line x1="50" y1="150" x2={endX} y2={endY} stroke="#a855f7" strokeWidth="2" />
+          {/* Arc for angle */}
+          <path d={`M 80 150 A 30 30 0 0 0 ${50 + 30 * Math.cos(radians)} ${150 - 30 * Math.sin(radians)}`} fill="none" stroke="#22d3ee" strokeWidth="1.5" />
+          {/* Angle label */}
+          <text x="90" y="138" fill="#22d3ee" fontSize="12">{angle}°</text>
+          {/* Point O */}
+          <circle cx="50" cy="150" r="3" fill="#fff" />
+          <text x="40" y="170" fill="#94a3b8" fontSize="11">O</text>
+        </svg>
+        <div className="text-xs">
+          <label className="text-gray-300 flex items-center gap-2">
+            Angle: {angle}°
+            <input type="range" min="1" max="180" value={angle} onChange={(e) => setAngle(Number(e.target.value))} className="flex-1" />
+          </label>
+        </div>
+      </div>
+    )
+  }
 
   if (diagram.type === 'venn') {
     return (
@@ -309,6 +341,17 @@ function InteractiveDiagram({ diagram }) {
 
 const inferDiagramRequest = (text = '') => {
   const q = text.toLowerCase()
+  
+  // Angle detection
+  if (q.includes('angle') || q.includes('degree') || q.includes('°')) {
+    const angleMatch = text.match(/(\d+)\s*(?:°|degree)/i)
+    return {
+      type: 'angle',
+      title: 'Interactive Angle',
+      angle: angleMatch ? Number(angleMatch[1]) : 75
+    }
+  }
+  
   if (q.includes('venn')) {
     const vsMatch = text.match(/venn(?:\s+diagram)?(?:\s+(?:for|of|between))?\s+(.+?)\s+(?:vs|and|&)\s+(.+)/i)
     const left = vsMatch?.[1]?.trim()?.replace(/[?.!,]$/, '') || 'Set A'
@@ -1324,8 +1367,78 @@ Be friendly and make it engaging!`
       }
       const currentStepData = lessonContent[currentStep]
       
-      // Check if user understood
-      const checkPrompt = `You are teaching "${activeLesson.title}" - Step ${currentStep + 1}/${lessonContent.length}.
+      // Check if this is a math/calculation problem that needs step-by-step solving
+      const isMathProblem = /solve|calculate|find|compute|evaluate|simplify|draw|angle|triangle|graph|plot/i.test(userMsg) || 
+                           /^[0-9x+\-*/=^√()]+$/.test(userMsg.replace(/\s/g, '')) ||
+                           /[0-9+\-*/=^√∫∑]/.test(userMsg)
+      
+      let response
+      let parsedSolution = null
+      
+      if (isMathProblem) {
+        // Use math solver mode for step-by-step
+        const mathPrompt = `You are an expert tutor helping a student with "${activeLesson?.title || activeCourse?.name}".
+
+The student asked: "${userMsg}"
+${attachmentContext}
+
+CRITICAL: Return ONLY valid JSON, no markdown, no explanation outside JSON.
+
+JSON format (follow exactly):
+{
+  "steps": [
+    {"description": "What we're doing", "math": "LaTeX expression like \\\\frac{a}{b}", "explanation": "Why this step"}
+  ],
+  "solution": "Final answer with units if applicable",
+  "tip": {"title": "Pro tip", "content": "Helpful shortcut"},
+  "fullExplanation": "2-3 sentence friendly summary of the solution",
+  "followUpQuestions": ["Practice question 1?", "Related concept?", "Harder variation?"],
+  "diagram": {"type": "angle|triangle|cartesian|venn|none", "title": "Diagram title", "angle": 75, "a": 6, "b": 8, "x": 0, "y": 0}
+}
+
+Rules:
+- Include 3-6 steps minimum
+- Use LaTeX in "math" field (double-escape backslashes)
+- For geometry: set appropriate diagram.type
+- Always include followUpQuestions array
+- Be encouraging!`
+
+        response = await sendMessage([
+          { role: 'user', content: `Lesson context: ${activeLesson?.title}` },
+          ...messages.slice(-6).map(m => ({ role: m.role, content: m.content })),
+          { role: 'user', content: mathPrompt }
+        ], activeCourse?.name || 'Mathematics')
+        
+        // Try to parse as JSON for step-by-step display
+        try {
+          let jsonStr = response.content
+          const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
+          if (jsonMatch) jsonStr = jsonMatch[1]
+          const start = jsonStr.indexOf('{')
+          const end = jsonStr.lastIndexOf('}')
+          if (start !== -1 && end !== -1) {
+            jsonStr = jsonStr.substring(start, end + 1)
+            parsedSolution = JSON.parse(jsonStr)
+          }
+        } catch (e) {
+          // Not JSON, use as plain text
+        }
+        
+        const finalContent = parsedSolution?.fullExplanation || response.content
+        const diagram = parsedSolution?.diagram || inferDiagramRequest(`${userMsg}\n${finalContent}`)
+        
+        if (voiceEnabled && finalContent) speakMessage(finalContent)
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: finalContent, 
+          solution: parsedSolution,
+          diagram: diagram
+        }])
+        setStepCheckShown(prev => ({ ...prev, [currentStep]: true }))
+        
+      } else {
+        // Regular teaching mode
+        const checkPrompt = `You are teaching "${activeLesson.title}" - Step ${currentStep + 1}/${lessonContent.length}.
 
 Current topic: ${currentStepData?.title || 'Understanding'}
 Key concept to teach: ${currentStepData?.content?.substring(0, 500) || 'the lesson content'}
@@ -1346,51 +1459,52 @@ Your response MUST include:
 
 Be encouraging, use emojis, and ACTUALLY TEACH - don't just chat!`
 
-      const response = await sendMessage([
-        { role: 'user', content: `Lesson: ${activeLesson.title}` },
-        ...messages.map(m => ({ role: m.role, content: m.content })),
-        { role: 'user', content: checkPrompt }
-      ], activeCourse.name)
-      
-      const aiResponse = response.content
-      const cleanedResponse = aiResponse.replace('READY_NEXT', '').trim()
-      const fallbackTeachingResponse = `Let me teach this clearly 👇\n\n${currentStepData?.content || 'Here is the key concept for this step.'}\n\nExample: ${currentStepData?.checkAnswer || 'Apply this idea to a simple real-life situation to verify understanding.'}\n\nQuick check: ${currentStepData?.checkQuestion || 'Can you explain this concept in your own words?' }`
-      const looksLikeNonTeachingReply =
-        !cleanedResponse ||
-        cleanedResponse.length < 40 ||
-        /(rephrase|clarify|what do you mean|can you explain your question)/i.test(cleanedResponse)
-      setMessages(prev => {
-        const lastAssistant = [...prev].reverse().find(m => m.role === 'assistant')
-        const finalResponse = looksLikeNonTeachingReply
-          ? fallbackTeachingResponse
-          : (lastAssistant && cleanEscapedText(lastAssistant.content) === cleanEscapedText(cleanedResponse))
-          ? "Great progress. Let's continue to the next part."
-          : cleanedResponse
-        if (voiceEnabled && finalResponse) speakMessage(finalResponse)
-        return [...prev, { role: 'assistant', content: finalResponse, diagram: inferDiagramRequest(`${userMsg}\n${finalResponse}`) }]
-      })
-      setStepCheckShown(prev => ({ ...prev, [currentStep]: true }))
-      
-      // If student understood, move to next step after a delay
-      if (aiResponse.includes('READY_NEXT') && currentStep < lessonContent.length - 1) {
-        setTimeout(() => {
-          setCurrentStep(currentStep + 1)
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: `# ${lessonContent[currentStep + 1].title}\n\n${lessonContent[currentStep + 1].content}`,
-            diagram: inferDiagramRequest(lessonContent[currentStep + 1].content)
-          }])
-          if (voiceEnabled) speakMessage(`${lessonContent[currentStep + 1].title}. ${lessonContent[currentStep + 1].content}`)
-        }, 1500)
-      } else if (aiResponse.includes('READY_NEXT') && currentStep === lessonContent.length - 1) {
-        // Lesson complete - quiz time
-        setTimeout(() => {
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: `🎉 **Amazing work!** You've completed all the learning steps!\n\nNow let's test what you learned with a quick quiz. Ready?\n\n*Click "Take Quiz" below to continue!*`
-          }])
-          if (voiceEnabled) speakMessage('Amazing work. You completed all learning steps. Ready for quiz?')
-        }, 1500)
+        response = await sendMessage([
+          { role: 'user', content: `Lesson: ${activeLesson.title}` },
+          ...messages.map(m => ({ role: m.role, content: m.content })),
+          { role: 'user', content: checkPrompt }
+        ], activeCourse.name)
+        
+        const aiResponse = response.content
+        const cleanedResponse = aiResponse.replace('READY_NEXT', '').trim()
+        const fallbackTeachingResponse = `Let me teach this clearly 👇\n\n${currentStepData?.content || 'Here is the key concept for this step.'}\n\nExample: ${currentStepData?.checkAnswer || 'Apply this idea to a simple real-life situation to verify understanding.'}\n\nQuick check: ${currentStepData?.checkQuestion || 'Can you explain this concept in your own words?' }`
+        const looksLikeNonTeachingReply =
+          !cleanedResponse ||
+          cleanedResponse.length < 40 ||
+          /(rephrase|clarify|what do you mean|can you explain your question)/i.test(cleanedResponse)
+        setMessages(prev => {
+          const lastAssistant = [...prev].reverse().find(m => m.role === 'assistant')
+          const finalResponse = looksLikeNonTeachingReply
+            ? fallbackTeachingResponse
+            : (lastAssistant && cleanEscapedText(lastAssistant.content) === cleanEscapedText(cleanedResponse))
+            ? "Great progress. Let's continue to the next part."
+            : cleanedResponse
+          if (voiceEnabled && finalResponse) speakMessage(finalResponse)
+          return [...prev, { role: 'assistant', content: finalResponse, diagram: inferDiagramRequest(`${userMsg}\n${finalResponse}`) }]
+        })
+        setStepCheckShown(prev => ({ ...prev, [currentStep]: true }))
+        
+        // If student understood, move to next step after a delay
+        if (aiResponse.includes('READY_NEXT') && currentStep < lessonContent.length - 1) {
+          setTimeout(() => {
+            setCurrentStep(currentStep + 1)
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              content: `# ${lessonContent[currentStep + 1].title}\n\n${lessonContent[currentStep + 1].content}`,
+              diagram: inferDiagramRequest(lessonContent[currentStep + 1].content)
+            }])
+            if (voiceEnabled) speakMessage(`${lessonContent[currentStep + 1].title}. ${lessonContent[currentStep + 1].content}`)
+          }, 1500)
+        } else if (aiResponse.includes('READY_NEXT') && currentStep === lessonContent.length - 1) {
+          // Lesson complete - quiz time
+          setTimeout(() => {
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              content: `🎉 **Amazing work!** You've completed all the learning steps!\n\nNow let's test what you learned with a quick quiz. Ready?\n\n*Click "Take Quiz" below to continue!*`
+            }])
+            if (voiceEnabled) speakMessage('Amazing work. You completed all learning steps. Ready for quiz?')
+          }, 1500)
+        }
       }
     } catch (error) {
       const currentStepData = lessonContent[currentStep]
@@ -3039,7 +3153,34 @@ Respond in ${activeCourse?.language || 'English'} language.`
                           <p className="text-gray-100">{msg.content}</p>
                         </>
                       ) : (
-                        <MarkdownRenderer content={msg.content} />
+                        <>
+                          <MarkdownRenderer content={msg.content} />
+                          {/* Step-by-step solution display */}
+                          {msg.solution?.steps?.length > 0 && (
+                            <SolvingSteps 
+                              steps={msg.solution.steps} 
+                              solution={msg.solution.solution}
+                              tip={msg.solution.tip}
+                            />
+                          )}
+                          {/* Follow-up questions from solution */}
+                          {msg.solution?.followUpQuestions?.length > 0 && (
+                            <div className="mt-4 pt-3 border-t border-gray-700/50">
+                              <p className="text-xs text-gray-400 mb-2">Try these next:</p>
+                              <div className="flex flex-wrap gap-2">
+                                {msg.solution.followUpQuestions.map((q, qi) => (
+                                  <button
+                                    key={qi}
+                                    onClick={() => setInput(q)}
+                                    className="px-2 py-1 rounded text-xs bg-primary-500/10 border border-primary-500/20 hover:border-primary-500/40 text-primary-300"
+                                  >
+                                    {q}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )}
                       {msg.role === 'assistant' && msg.diagram && (
                         <div className="mt-3">
