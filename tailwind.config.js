@@ -89,6 +89,8 @@ export default {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
         display: ['Space Grotesk', 'Inter', 'system-ui', 'sans-serif'],
         gaming: ['Orbitron', 'Space Grotesk', 'sans-serif'],
+        cyber: ['Audiowide', 'Orbitron', 'sans-serif'],
+        ui: ['Rajdhani', 'Inter', 'sans-serif'],
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-out',

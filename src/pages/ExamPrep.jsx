@@ -68,6 +68,19 @@ const subjectStyles = {
   default: { icon: '📖', color: 'from-primary-500 to-success-400', accent: 'bg-primary-500/20 text-primary-400' }
 }
 
+const SCIENCE_GAMES = [
+  { id: 'lab-chaos', title: 'Lab Chaos', subjects: ['Physics', 'Chemistry'], desc: 'Mix compounds fast; wrong mix explodes 💥', duration: '2–5 min' },
+  { id: 'circuit-builder', title: 'Circuit Builder', subjects: ['Physics', 'Science'], desc: 'Connect wires and light up current flow', duration: '3–5 min' },
+  { id: 'planet-survivor', title: 'Planet Survivor', subjects: ['Physics', 'Science'], desc: 'Survive gravity and oxygen constraints', duration: '3–5 min' },
+  { id: 'mutation-lab', title: 'Mutation Lab', subjects: ['Biology', 'Science'], desc: 'Combine traits to survive environments', duration: '2–5 min' },
+  { id: 'time-attack', title: 'Time Attack Quiz', subjects: ['all'], desc: 'Fast quiz combos, hints, and freeze-time boosts', duration: '2–4 min' },
+  { id: 'heat-control', title: 'Heat Control', subjects: ['Physics', 'Chemistry', 'Science'], desc: 'Keep systems in safe thermal zone', duration: '2–5 min' },
+  { id: 'rocket-builder', title: 'Rocket Builder', subjects: ['Physics', 'Science'], desc: 'Tune mass/fuel/force to launch right', duration: '3–5 min' },
+  { id: 'escape-room', title: 'Science Escape Room', subjects: ['Science', 'Math', 'all'], desc: 'Solve clues to unlock next room', duration: '4–5 min' },
+  { id: 'boss-battle', title: 'Boss Battle', subjects: ['all'], desc: 'Correct answers damage the boss', duration: '2–5 min' },
+  { id: 'prediction-lab', title: 'Guess What Happens', subjects: ['Science', 'Physics', 'Chemistry', 'all'], desc: 'Predict outcome, then simulate result', duration: '2–4 min' }
+]
+
 // Check if mobile
 const isMobile = () => window.innerWidth < 768
 
@@ -1887,6 +1900,7 @@ Return ONLY valid JSON array:
     const isCorrect = selectedAnswer === questions[currentQ].correct
     const topic = activeLesson?.title || activeCourse?.name || 'General'
     const elapsedMs = questionStartTime ? Date.now() - questionStartTime : 0
+    const retryCount = questionRetryCount + answerChanges
     
     setAnswers([...answers, { selected: selectedAnswer, correct: isCorrect, timeTakenMs: elapsedMs, retryCount }])
     setShowExplanation(true)
@@ -2582,6 +2596,20 @@ Respond in ${activeCourse?.language || 'English'} language.`
     return true
   })
   const completedSubjects = courses.filter(c => (c.totalProgress || 0) >= 100).length
+  const getRecommendedGamesForCourse = (course) => {
+    if (!course?.name) return []
+    const name = course.name.toLowerCase()
+    const isScience = /physics|chemistry|biology|science|thermo|circuit|atom|reaction|gravity|planet/.test(name)
+    const subjectTags = []
+    if (/physics/.test(name)) subjectTags.push('Physics')
+    if (/chemistry|chemical|reaction/.test(name)) subjectTags.push('Chemistry')
+    if (/biology|bio|genetic|evolution/.test(name)) subjectTags.push('Biology')
+    if (isScience) subjectTags.push('Science')
+    if (/math/.test(name)) subjectTags.push('Math')
+    const games = SCIENCE_GAMES.filter((g) => g.subjects.includes('all') || subjectTags.some((s) => g.subjects.includes(s)))
+    if (isScience) return games
+    return games.filter((g) => g.subjects.includes('all') || g.subjects.includes('Math'))
+  }
 
   // Mobile bottom nav items
   const mobileNavItems = [
@@ -2592,7 +2620,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
   ]
 
   return (
-    <div className="h-screen bg-surface-900 text-white flex flex-col md:flex-row overflow-hidden">
+    <div className="h-screen bg-surface-900 text-white flex flex-col md:flex-row overflow-hidden bg-mesh">
       {/* Mobile Header */}
       <header className="md:hidden bg-surface-800/95 backdrop-blur-xl border-b border-white/5 px-4 py-3 flex items-center justify-between safe-area-top">
         <div className="flex items-center gap-3">
@@ -2725,7 +2753,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden relative z-10">
         {/* Desktop Top Bar - Gaming Style */}
-        <header className="hidden md:flex bg-surface-800/60 backdrop-blur-xl border-b border-primary-500/10 px-6 py-4 items-center justify-between">
+        <header className="hidden md:flex cyber-panel backdrop-blur-xl border-b border-primary-500/20 px-6 py-4 items-center justify-between">
           <div className="flex items-center gap-4">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-primary-500/10 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-primary-500/20">
               <Menu className="h-5 w-5 text-gray-400" />
@@ -2744,11 +2772,11 @@ Respond in ${activeCourse?.language || 'English'} language.`
             )}
             
             {view === 'home' && (
-              <h1 className="text-xl font-semibold">Dashboard</h1>
+              <h1 className="text-xl font-semibold cyber-heading">Dashboard</h1>
             )}
             
             {view === 'chat' && (
-              <h1 className="text-xl font-semibold">AI Tutor</h1>
+              <h1 className="text-xl font-semibold cyber-heading">AI Tutor</h1>
             )}
           </div>
           
@@ -2805,7 +2833,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
           {view === 'home' && (
             <div className="p-4 md:p-6 max-w-6xl mx-auto">
               {/* Hero XP Card - Gaming Style */}
-              <div className="game-card p-6 md:p-8 mb-6 relative overflow-hidden">
+              <div className="game-card cyber-panel p-6 md:p-8 mb-6 relative overflow-hidden">
                 {/* Animated background gradient */}
                 <div className="absolute inset-0 bg-gradient-to-br from-primary-600/20 via-transparent to-accent-500/10 pointer-events-none" />
                 <div className="absolute top-0 right-0 w-64 h-64 bg-primary-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -2819,7 +2847,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
                     </div>
                     <div>
                       <p className="text-gray-400 text-sm font-medium uppercase tracking-wider">Your Rank</p>
-                      <h2 className="text-2xl md:text-3xl font-bold font-display bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                      <h2 className="text-2xl md:text-3xl font-bold cyber-heading bg-gradient-to-r from-[#ffd4e6] via-[#f4eaff] to-[#b8ecff] bg-clip-text text-transparent">
                         {getRank(userProgress.xp).name}
                       </h2>
                       <div className="flex items-center gap-3 mt-2">
@@ -3276,11 +3304,11 @@ Respond in ${activeCourse?.language || 'English'} language.`
                 <div className="w-14 h-14 md:w-16 md:h-16 bg-primary-500/15 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-primary-500/20">
                   <Brain className="h-7 w-7 md:h-8 md:w-8 text-primary-400" />
                 </div>
-                <h1 className="text-xl md:text-2xl font-bold mb-2">Let's See What You Know!</h1>
+                <h1 className="text-xl md:text-2xl font-bold mb-2 cyber-heading">Let's See What You Know!</h1>
                 <p className="text-gray-400 text-sm md:text-base px-4">Answer these questions so I can personalize your learning.</p>
               </div>
               
-              <div className="bg-surface-800/60 rounded-2xl border border-white/5 p-4 md:p-6">
+              <div className="bg-surface-800/60 cyber-panel rounded-2xl border border-white/5 p-4 md:p-6">
                 {isGenerating ? (
                   <div className="flex flex-col items-center justify-center py-12 md:py-16">
                     {/* Animated Icon */}
@@ -3400,13 +3428,13 @@ Respond in ${activeCourse?.language || 'English'} language.`
           {view === 'course' && activeCourse && (
             <div className="p-4 md:p-6 max-w-4xl mx-auto">
               {/* Course Header */}
-              <div className="bg-surface-800/60 rounded-2xl p-4 md:p-6 border border-white/5 mb-6 md:mb-8">
+              <div className="bg-surface-800/60 cyber-panel rounded-2xl p-4 md:p-6 border border-white/5 mb-6 md:mb-8">
                 <div className="flex items-start gap-3 md:gap-4 mb-4">
                   <div className={`w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gradient-to-br ${getSubjectStyle(activeCourse.name).color} flex items-center justify-center text-xl md:text-2xl shrink-0 shadow-lg`}>
                     {getSubjectStyle(activeCourse.name).icon}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h1 className="text-xl md:text-2xl font-bold truncate">{activeCourse.name}</h1>
+                    <h1 className="text-xl md:text-2xl font-bold truncate cyber-heading">{activeCourse.name}</h1>
                     <p className="text-sm md:text-base text-gray-400">{activeCourse.lessons.length} lessons · {activeCourse.lessons.filter(l => l.completed).length} completed</p>
                     {activeCourse.language && (
                       <p className="text-xs text-gray-500 mt-1">Language: {activeCourse.language}</p>
@@ -3518,6 +3546,36 @@ Respond in ${activeCourse?.language || 'English'} language.`
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Recommended mini-games */}
+              <div className="mt-8">
+                <h2 className="text-lg font-semibold mb-3 md:mb-4">Recommended Mini-Games</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {getRecommendedGamesForCourse(activeCourse).slice(0, 6).map((game) => (
+                      <button
+                        key={game.id}
+                      onClick={() => {
+                        const targetLesson = activeCourse.lessons?.[0]
+                        if (!targetLesson) return
+                        if (game.id === 'time-attack') {
+                          setChallengeMode('timed'); setChallengeTimer(60); startQuiz(targetLesson)
+                        } else if (game.id === 'boss-battle') {
+                          setChallengeMode('boss'); startQuiz(targetLesson)
+                        } else {
+                          alert(`${game.title} mode coming next. Use Quiz/Challenge for now.`)
+                        }
+                      }}
+                      className="text-left bg-surface-800/60 border border-white/5 hover:border-primary-500/30 rounded-xl p-4 transition-all cursor-pointer cyber-panel"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="font-medium">{game.title}</p>
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-primary-500/20 text-primary-300">{game.duration}</span>
+                      </div>
+                      <p className="text-sm text-gray-400">{game.desc}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -4037,15 +4095,15 @@ Respond in ${activeCourse?.language || 'English'} language.`
 
           {/* AI Tutor Chat View */}
           {view === 'chat' && (
-            <div className="h-full flex flex-col bg-surface-900">
+            <div className="h-full flex flex-col bg-surface-900 bg-mesh">
               {/* Chat Header */}
-              <div className="bg-surface-800/80 backdrop-blur-xl border-b border-white/5 px-4 py-3 flex items-center justify-between shrink-0">
+              <div className="bg-surface-800/80 cyber-panel backdrop-blur-xl border-b border-white/5 px-4 py-3 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="bg-primary-500/15 p-2 rounded-xl border border-primary-500/20">
                     <Bot className="h-5 w-5 text-primary-400" />
                   </div>
                   <div>
-                    <h1 className="font-semibold text-white">AI Tutor</h1>
+                    <h1 className="font-semibold text-white cyber-heading">AI Tutor</h1>
                     <p className="text-xs text-gray-500">Ask me anything</p>
                   </div>
                 </div>
@@ -4077,7 +4135,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
                     <div className="bg-primary-500/15 p-4 rounded-2xl mb-4 border border-primary-500/20">
                       {mathMode ? <Calculator className="h-10 w-10 text-primary-400" /> : <Sparkles className="h-10 w-10 text-primary-400" />}
                     </div>
-                    <h2 className="text-xl font-semibold text-white mb-2">
+                    <h2 className="text-xl font-semibold text-white mb-2 cyber-heading">
                       {mathMode ? 'Math Solver' : 'AI Tutor'}
                     </h2>
                     <p className="text-gray-400 max-w-md mb-6">
@@ -4092,7 +4150,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
                         : ['Explain quantum physics', 'Help me with essay writing', 'Quiz me on history']
                       ).map((s, i) => (
                         <button key={i} onClick={() => setChatInput(s)}
-                          className="px-4 py-2 bg-white/5 border border-white/10 rounded-full text-sm text-gray-300 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer">
+                          className="px-4 py-2 cyber-chip rounded-full text-sm hover:bg-white/10 transition-all cursor-pointer">
                           {s}
                         </button>
                       ))}

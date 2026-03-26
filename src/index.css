@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&family=Audiowide&family=Rajdhani:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -32,6 +32,9 @@ html {
   --accent-tertiary: #ff2d92;
   --accent-glow: rgba(168, 85, 247, 0.2);
   --neon-glow: 0 0 20px rgba(168, 85, 247, 0.4);
+  --cyber-red: #ff3b7a;
+  --cyber-blue: #4ecbff;
+  --cyber-violet: #8b5cff;
 }
 
 body {
@@ -485,6 +488,30 @@ button, a, [role="button"] {
     radial-gradient(at 40% 20%, rgba(168, 85, 247, 0.1) 0px, transparent 50%),
     radial-gradient(at 80% 0%, rgba(34, 211, 238, 0.08) 0px, transparent 50%),
     radial-gradient(at 0% 100%, rgba(255, 45, 146, 0.06) 0px, transparent 50%);
+}
+
+.cyber-panel {
+  background:
+    linear-gradient(140deg, rgba(26, 11, 40, 0.88), rgba(9, 14, 45, 0.86)),
+    radial-gradient(120% 100% at 100% 0%, rgba(255, 59, 122, 0.18), transparent 55%),
+    radial-gradient(100% 100% at 0% 100%, rgba(78, 203, 255, 0.14), transparent 45%);
+  border: 1px solid rgba(255, 59, 122, 0.25);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 24px rgba(139, 92, 252, 0.22);
+}
+
+.cyber-heading {
+  font-family: 'Audiowide', 'Orbitron', sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.cyber-copy {
+  font-family: 'Rajdhani', 'Inter', sans-serif;
+}
+
+.cyber-chip {
+  border: 1px solid rgba(255, 59, 122, 0.28);
+  background: linear-gradient(90deg, rgba(255, 59, 122, 0.14), rgba(78, 203, 255, 0.08));
+  color: #ffd7e7;
 }
 
 /* KaTeX overrides for dark mode */
