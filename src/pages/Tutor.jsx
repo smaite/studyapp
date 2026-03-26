@@ -285,13 +285,15 @@ export default function Tutor() {
       // Check if this is a math problem that needs step-by-step solving
       const isMathProblem = isMathSubject || /[0-9+\-*/=^√∫∑]/.test(input) || selectedImage
       
-      if (isMathProblem && (selectedImage || /solve|calculate|find|compute|evaluate|simplify|draw|angle|triangle|graph|plot/i.test(input) || /^[0-9x+\-*/=^√()]+$/.test(input.replace(/\s/g, '')))) {
+      if (isMathProblem && (selectedImage || /solve|calculate|find|compute|evaluate|simplify|draw|angle|triangle|graph|plot|step.?by.?step|how.?to|make|construct|degree|pythag/i.test(input) || /^[0-9x+\-*/=^√()]+$/.test(input.replace(/\s/g, '')))) {
         // Use math solver mode
         const mathPrompt = `You are an expert math tutor. Solve this problem step by step.
 
-CRITICAL: Return ONLY valid JSON, no markdown, no explanation outside JSON.
+YOU MUST RETURN ONLY VALID JSON. NO MARKDOWN. NO TEXT BEFORE OR AFTER THE JSON.
 
-JSON format (follow exactly):
+Start your response with { and end with }
+
+JSON format (follow EXACTLY):
 {
   "steps": [
     {"description": "What we're doing", "math": "LaTeX expression like \\\\frac{a}{b}", "explanation": "Why this step"}
@@ -300,14 +302,14 @@ JSON format (follow exactly):
   "tip": {"title": "Pro tip", "content": "Helpful shortcut"},
   "fullExplanation": "2-3 sentence friendly summary of the solution",
   "followUpQuestions": ["Practice question 1?", "Related concept question?", "Harder variation?"],
-  "diagram": {"type": "triangle|cartesian|venn|none", "title": "Diagram title", "a": 6, "b": 8, "x": 0, "y": 0}
+  "diagram": {"type": "angle|triangle|cartesian|venn|none", "title": "Diagram title", "angle": 75, "a": 6, "b": 8, "x": 0, "y": 0}
 }
 
 Rules:
 - Include 3-6 steps minimum
 - Use LaTeX in "math" field (double-escape backslashes)
-- For geometry: set diagram.type to "triangle" or "cartesian"
-- For angles: describe drawing steps clearly
+- For geometry: set diagram.type to "triangle", "cartesian", or "angle"
+- For angle problems: use diagram.type "angle" with diagram.angle value
 - Always include followUpQuestions array
 
 Problem: ${input}`

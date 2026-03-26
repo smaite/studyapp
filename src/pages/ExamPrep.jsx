@@ -1368,7 +1368,7 @@ Be friendly and make it engaging!`
       const currentStepData = lessonContent[currentStep]
       
       // Check if this is a math/calculation problem that needs step-by-step solving
-      const isMathProblem = /solve|calculate|find|compute|evaluate|simplify|draw|angle|triangle|graph|plot/i.test(userMsg) || 
+      const isMathProblem = /solve|calculate|find|compute|evaluate|simplify|draw|angle|triangle|graph|plot|step.?by.?step|how.?to|make|construct|degree|pythag/i.test(userMsg) || 
                            /^[0-9x+\-*/=^√()]+$/.test(userMsg.replace(/\s/g, '')) ||
                            /[0-9+\-*/=^√∫∑]/.test(userMsg)
       
@@ -1382,9 +1382,11 @@ Be friendly and make it engaging!`
 The student asked: "${userMsg}"
 ${attachmentContext}
 
-CRITICAL: Return ONLY valid JSON, no markdown, no explanation outside JSON.
+YOU MUST RETURN ONLY VALID JSON. NO MARKDOWN. NO TEXT BEFORE OR AFTER THE JSON.
 
-JSON format (follow exactly):
+Start your response with { and end with }
+
+JSON format (follow EXACTLY):
 {
   "steps": [
     {"description": "What we're doing", "math": "LaTeX expression like \\\\frac{a}{b}", "explanation": "Why this step"}
