@@ -2922,9 +2922,40 @@ Respond in ${activeCourse?.language || 'English'} language.`
               
               <div className="bg-surface-800/60 rounded-2xl border border-white/5 p-4 md:p-6">
                 {isGenerating ? (
-                  <div className="text-center py-10 md:py-12">
-                    <Loader2 className="h-10 w-10 md:h-12 md:w-12 text-primary-500 animate-spin mx-auto mb-4" />
-                    <p className="text-gray-400">Preparing your assessment...</p>
+                  <div className="flex flex-col items-center justify-center py-12 md:py-16">
+                    {/* Animated Icon */}
+                    <div className="relative mb-6 md:mb-8">
+                      <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br from-primary-500/20 to-purple-500/20 border border-primary-500/30 flex items-center justify-center">
+                        <Timer className="h-8 w-8 md:h-10 md:w-10 text-primary-400 animate-pulse" />
+                      </div>
+                      <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-primary-500/20 to-purple-500/20 blur-lg animate-pulse" />
+                    </div>
+                    
+                    {/* Title */}
+                    <h2 className="text-lg md:text-xl font-semibold mb-2 text-center">Creating your assessment</h2>
+                    <p className="text-gray-400 text-xs md:text-sm mb-6 md:mb-8 text-center">Preparing personalized questions...</p>
+                    
+                    {/* Progress Steps */}
+                    <div className="w-full max-w-xs bg-surface-700/80 rounded-xl border border-gray-700/50 p-3 md:p-4">
+                      <div className="flex items-center gap-2 md:gap-3 mb-3">
+                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                        <span className="text-xs md:text-sm text-gray-300">Checking your mastery level...</span>
+                      </div>
+                      <div className="flex gap-0.5 md:gap-1">
+                        {[...Array(12)].map((_, i) => (
+                          <div 
+                            key={i} 
+                            className={`flex-1 h-1 md:h-1.5 rounded-full transition-all duration-300 ${
+                              i < 4 ? 'bg-primary-500' : 'bg-gray-700'
+                            }`}
+                            style={{ 
+                              animationDelay: `${i * 100}ms`,
+                              animation: i < 8 ? 'pulse 1.5s ease-in-out infinite' : 'none'
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 ) : questions.length > 0 ? (
                   <>
@@ -3387,20 +3418,52 @@ Respond in ${activeCourse?.language || 'English'} language.`
           
           {/* QUIZ */}
           {view === 'quiz' && (
-            <div className="max-w-2xl mx-auto p-6">
-              <div className="bg-gray-900/50 rounded-2xl border border-gray-800 p-6">
+            <div className="max-w-2xl mx-auto p-4 md:p-6">
+              <div className="bg-gray-900/50 rounded-2xl border border-gray-800 p-4 md:p-6">
                 {isGenerating ? (
-                  <div className="text-center py-12">
-                    <Loader2 className="h-12 w-12 text-primary-500 animate-spin mx-auto mb-4" />
-                    <p className="text-gray-400">Generating quiz questions...</p>
+                  <div className="flex flex-col items-center justify-center py-16 md:py-20">
+                    {/* Animated Icon */}
+                    <div className="relative mb-8">
+                      <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-gradient-to-br from-primary-500/20 to-purple-500/20 border border-primary-500/30 flex items-center justify-center">
+                        <Timer className="h-10 w-10 md:h-12 md:w-12 text-primary-400 animate-pulse" />
+                      </div>
+                      <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-primary-500/20 to-purple-500/20 blur-lg animate-pulse" />
+                    </div>
+                    
+                    {/* Title */}
+                    <h2 className="text-xl md:text-2xl font-semibold mb-2 text-center">Creating your quiz</h2>
+                    <p className="text-gray-400 text-sm md:text-base mb-8 text-center">Preparing personalized questions...</p>
+                    
+                    {/* Progress Steps */}
+                    <div className="w-full max-w-sm bg-surface-800/80 rounded-xl border border-gray-700/50 p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                        <span className="text-sm text-gray-300">Analyzing your mastery level...</span>
+                      </div>
+                      <div className="flex gap-1">
+                        {[...Array(12)].map((_, i) => (
+                          <div 
+                            key={i} 
+                            className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${
+                              i < 4 ? 'bg-primary-500' : 'bg-gray-700'
+                            }`}
+                            style={{ 
+                              animationDelay: `${i * 100}ms`,
+                              animation: i < 8 ? 'pulse 1.5s ease-in-out infinite' : 'none'
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 ) : questions.length > 0 ? (
                   <>
-                    <div className="flex items-center justify-between mb-6">
-                      <span className="text-sm text-gray-500">Question {currentQ + 1} of {questions.length}</span>
+                    {/* Question header - mobile optimized */}
+                    <div className="flex items-center justify-between mb-4 md:mb-6">
+                      <span className="text-xs md:text-sm text-gray-500">Question {currentQ + 1} of {questions.length}</span>
                       <div className="flex gap-1">
                         {questions.map((_, i) => (
-                          <div key={i} className={`w-3 h-3 rounded-full ${
+                          <div key={i} className={`w-2 h-2 md:w-3 md:h-3 rounded-full ${
                             i < currentQ ? (answers[i]?.correct ? 'bg-green-500' : 'bg-red-500') : 
                             i === currentQ ? 'bg-primary-500' : 'bg-gray-700'
                           }`} />
@@ -3408,44 +3471,50 @@ Respond in ${activeCourse?.language || 'English'} language.`
                       </div>
                     </div>
                     
-                    <div className="mb-6 text-lg">
+                    {/* Question text - responsive */}
+                    <div className="mb-4 md:mb-6 text-base md:text-lg">
                       <MarkdownRenderer content={cleanEscapedText(questions[currentQ]?.question)} />
                     </div>
                     
-                    <div className="space-y-3 mb-6">
+                    {/* Options - mobile friendly touch targets */}
+                    <div className="space-y-2 md:space-y-3 mb-4 md:mb-6">
                       {questions[currentQ]?.options.map((opt, i) => (
                         <button
                           key={i}
                           onClick={() => handleQuizAnswer(i)}
                           disabled={showExplanation}
-                          className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                          className={`w-full text-left p-3 md:p-4 rounded-xl border-2 transition-all active:scale-[0.98] ${
                             showExplanation
                               ? i === questions[currentQ].correct ? 'border-green-500 bg-green-500/10' : i === selectedAnswer ? 'border-red-500 bg-red-500/10' : 'border-gray-800'
                               : selectedAnswer === i ? 'border-primary-500 bg-primary-500/10' : 'border-gray-800 hover:border-gray-700'
                           }`}
                         >
-                          <span className="text-gray-100">{cleanEscapedText(opt)}</span>
+                          <span className="text-sm md:text-base text-gray-100 break-words">{cleanEscapedText(opt)}</span>
                         </button>
                       ))}
                     </div>
                     
+                    {/* Explanation - responsive */}
                     {showExplanation && (
-                      <div className={`p-4 rounded-xl mb-6 ${answers[currentQ]?.correct ? 'bg-green-500/10 border border-green-500/30' : 'bg-amber-500/10 border border-amber-500/30'}`}>
-                        <p className={`font-medium mb-2 ${answers[currentQ]?.correct ? 'text-green-400' : 'text-amber-400'}`}>
+                      <div className={`p-3 md:p-4 rounded-xl mb-4 md:mb-6 ${answers[currentQ]?.correct ? 'bg-green-500/10 border border-green-500/30' : 'bg-amber-500/10 border border-amber-500/30'}`}>
+                        <p className={`font-medium mb-2 text-sm md:text-base ${answers[currentQ]?.correct ? 'text-green-400' : 'text-amber-400'}`}>
                           {answers[currentQ]?.correct ? '✓ Correct!' : '✗ Not quite'}
                         </p>
-                        <MarkdownRenderer content={cleanEscapedText(questions[currentQ]?.explanation)} />
+                        <div className="text-sm md:text-base">
+                          <MarkdownRenderer content={cleanEscapedText(questions[currentQ]?.explanation)} />
+                        </div>
                       </div>
                     )}
                     
-                    <div className="flex gap-3">
+                    {/* Action buttons - touch friendly */}
+                    <div className="flex gap-2 md:gap-3">
                       {!showExplanation ? (
-                        <button onClick={submitQuizAnswer} disabled={selectedAnswer === null} className="flex-1 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 py-3 rounded-xl font-medium">
+                        <button onClick={submitQuizAnswer} disabled={selectedAnswer === null} className="flex-1 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 py-3 md:py-3.5 rounded-xl font-medium text-sm md:text-base active:scale-[0.98] transition-transform">
                           Check Answer
                         </button>
                       ) : (
-                        <button onClick={nextQuizQuestion} className="flex-1 bg-primary-600 hover:bg-primary-500 py-3 rounded-xl font-medium flex items-center justify-center gap-2">
-                          {currentQ < questions.length - 1 ? 'Next Question' : 'See Results'} <ChevronRight className="h-5 w-5" />
+                        <button onClick={nextQuizQuestion} className="flex-1 bg-primary-600 hover:bg-primary-500 py-3 md:py-3.5 rounded-xl font-medium flex items-center justify-center gap-2 text-sm md:text-base active:scale-[0.98] transition-transform">
+                          {currentQ < questions.length - 1 ? 'Next Question' : 'See Results'} <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
                         </button>
                       )}
                     </div>
