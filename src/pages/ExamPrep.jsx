@@ -12,7 +12,7 @@ import {
   Mic, MicOff, Volume2, VolumeX, Languages, CloudOff, Cloud
 } from 'lucide-react'
 import { sendMessage, analyzeImage } from '../services/aiService'
-import { loadAllUserData, saveUserSubject, deleteUserSubject, saveUserProgress } from '../services/userDataService'
+import { loadAllUserData, syncAllSubjects, deleteUserSubject, saveUserProgress } from '../services/userDataService'
 import voiceService from '../services/voiceService'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import MathKeyboard from '../components/MathKeyboard'
@@ -648,7 +648,9 @@ export default function ExamPrep() {
   const [syncStatus, setSyncStatus] = useState('idle') // 'idle', 'syncing', 'synced', 'error'
   const [lastSynced, setLastSynced] = useState(null)
   const syncTimeoutRef = useRef(null)
+  const progressSyncTimeoutRef = useRef(null)
   const initialLoadDoneRef = useRef(false)
+  const loadedUserIdRef = useRef(null)
 
   // Filter
   const [searchQuery, setSearchQuery] = useState('')
@@ -670,6 +672,10 @@ export default function ExamPrep() {
 
   // Load data from Supabase on login
   useEffect(() => {
+    if (user?.id && loadedUserIdRef.current !== user.id) {
+      initialLoadDoneRef.current = false
+      loadedUserIdRef.current = user.id
+    }
     if (user && !initialLoadDoneRef.current) {
       initialLoadDoneRef.current = true
       loadFromSupabase()
@@ -718,20 +724,6 @@ export default function ExamPrep() {
     }
   }
 
-  // Debounced sync to Supabase when courses change
-  const syncCourseToSupabase = useCallback(async (course) => {
-    if (!user) return
-    
-    setSyncStatus('syncing')
-    const { error } = await saveUserSubject(user.id, course)
-    if (error) {
-      setSyncStatus('error')
-    } else {
-      setSyncStatus('synced')
-      setLastSynced(new Date())
-    }
-  }, [user])
-
   // Sync progress to Supabase (debounced)
   const syncProgressToSupabase = useCallback(async (progress) => {
     if (!user) return
@@ -744,12 +736,43 @@ export default function ExamPrep() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(courses))
-  }, [courses])
+    if (!user || !initialLoadDoneRef.current) return
+
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current)
+    }
+    syncTimeoutRef.current = setTimeout(async () => {
+      setSyncStatus('syncing')
+      const { error } = await syncAllSubjects(user.id, courses)
+      if (error) {
+        setSyncStatus('error')
+      } else {
+        setSyncStatus('synced')
+        setLastSynced(new Date())
+      }
+    }, 900)
+
+    return () => {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current)
+    }
+  }, [courses, user])
   
   // Save user progress
   useEffect(() => {
     localStorage.setItem(PROGRESS_KEY, JSON.stringify(userProgress))
-  }, [userProgress])
+    if (!user || !initialLoadDoneRef.current) return
+
+    if (progressSyncTimeoutRef.current) {
+      clearTimeout(progressSyncTimeoutRef.current)
+    }
+    progressSyncTimeoutRef.current = setTimeout(() => {
+      syncProgressToSupabase(userProgress)
+    }, 900)
+
+    return () => {
+      if (progressSyncTimeoutRef.current) clearTimeout(progressSyncTimeoutRef.current)
+    }
+  }, [userProgress, user, syncProgressToSupabase])
 
   // Save chat history
   useEffect(() => {
@@ -1847,9 +1870,12 @@ Return ONLY valid JSON array:
     }
   }
 
-  const deleteCourse = (id) => {
+  const deleteCourse = async (id) => {
     if (confirm('Delete this course? This cannot be undone.')) {
       setCourses(prev => prev.filter(c => c.id !== id))
+      if (user) {
+        await deleteUserSubject(user.id, id)
+      }
       if (activeCourse?.id === id) { 
         setActiveCourse(null)
         setView('home') 
@@ -2391,6 +2417,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
     if (searchQuery && !c.name.toLowerCase().includes(searchQuery.toLowerCase())) return false
     return true
   })
+  const completedSubjects = courses.filter(c => (c.totalProgress || 0) >= 100).length
 
   // Mobile bottom nav items
   const mobileNavItems = [
@@ -2562,6 +2589,23 @@ Respond in ${activeCourse?.language || 'English'} language.`
           </div>
           
           <div className="flex items-center gap-3">
+            {user && (
+              <div className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border ${
+                syncStatus === 'error'
+                  ? 'bg-red-500/10 text-red-300 border-red-500/30'
+                  : syncStatus === 'syncing'
+                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                    : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+              }`}>
+                {syncStatus === 'error' ? <CloudOff className="h-3.5 w-3.5" /> : <Cloud className="h-3.5 w-3.5" />}
+                <span>
+                  {syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'error' ? 'Sync error' : 'Synced'}
+                </span>
+                {lastSynced && syncStatus === 'synced' && (
+                  <span className="text-gray-400">· {new Date(lastSynced).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                )}
+              </div>
+            )}
             {activeCourse && view === 'course' && (
               <>
                 <button 
@@ -2671,63 +2715,6 @@ Respond in ${activeCourse?.language || 'English'} language.`
                 )}
               </div>
               
-              {/* Challenge Mode Cards - Bento Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <button 
-                  onClick={() => { setChallengeMode('timed'); setChallengeTimer(60); }}
-                  className="game-card p-5 text-left group cursor-pointer relative overflow-hidden"
-                >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl group-hover:bg-cyan-500/20 transition-all" />
-                  <div className="relative">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-glow-cyan">
-                      <Timer className="h-6 w-6 text-white" />
-                    </div>
-                    <h3 className="font-bold text-lg mb-1">Speed Run</h3>
-                    <p className="text-sm text-gray-400">60 second challenge</p>
-                    <div className="mt-3 flex items-center gap-2 text-cyan-400 text-sm font-medium">
-                      <span>+100 XP</span>
-                      <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-                </button>
-                
-                <button 
-                  onClick={() => { setChallengeMode('survival'); setChallengeLives(3); }}
-                  className="game-card p-5 text-left group cursor-pointer relative overflow-hidden"
-                >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-2xl group-hover:bg-red-500/20 transition-all" />
-                  <div className="relative">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-pink-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-glow-pink">
-                      <Heart className="h-6 w-6 text-white" />
-                    </div>
-                    <h3 className="font-bold text-lg mb-1">Survival Mode</h3>
-                    <p className="text-sm text-gray-400">3 lives, no mistakes</p>
-                    <div className="mt-3 flex items-center gap-2 text-red-400 text-sm font-medium">
-                      <span>+150 XP</span>
-                      <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-                </button>
-                
-                <button 
-                  onClick={() => setChallengeMode('boss')}
-                  className="game-card p-5 text-left group cursor-pointer relative overflow-hidden"
-                >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl group-hover:bg-purple-500/20 transition-all" />
-                  <div className="relative">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-glow">
-                      <Swords className="h-6 w-6 text-white" />
-                    </div>
-                    <h3 className="font-bold text-lg mb-1">Boss Fight</h3>
-                    <p className="text-sm text-gray-400">Hard mode unlocked</p>
-                    <div className="mt-3 flex items-center gap-2 text-purple-400 text-sm font-medium">
-                      <span>+200 XP</span>
-                      <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-                </button>
-              </div>
-              
               {/* Focus Areas - Neon Warning */}
               {getWeakTopics().length > 0 && (
                 <div className="game-card p-5 mb-6 border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-orange-500/5">
@@ -2830,6 +2817,29 @@ Respond in ${activeCourse?.language || 'English'} language.`
                 </section>
               )}
               
+              {/* Subjects Overview */}
+              <div className="game-card p-4 mb-6 border-primary-500/20">
+                <div className="flex flex-wrap items-center gap-3 md:gap-6">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-primary-400" />
+                    <span className="text-sm text-gray-400">Subjects</span>
+                    <span className="text-lg font-bold text-white">{courses.length}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-green-400" />
+                    <span className="text-sm text-gray-400">Completed</span>
+                    <span className="text-lg font-bold text-green-400">{completedSubjects}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Target className="h-4 w-4 text-cyan-400" />
+                    <span className="text-sm text-gray-400">Avg. Progress</span>
+                    <span className="text-lg font-bold text-cyan-400">
+                      {courses.length > 0 ? Math.round(courses.reduce((sum, c) => sum + (c.totalProgress || 0), 0) / courses.length) : 0}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               {/* All Courses - Gaming Style */}
               <section>
                 <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
@@ -2909,6 +2919,71 @@ Respond in ${activeCourse?.language || 'English'} language.`
                     })}
                   </div>
                 )}
+              </section>
+
+              {/* Challenge Mode Cards (moved lower) */}
+              <section className="mt-8">
+                <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+                    <Swords className="h-5 w-5 text-cyan-400" />
+                  </div>
+                  <span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">Challenge Modes</span>
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <button 
+                    onClick={() => { setChallengeMode('timed'); setChallengeTimer(60); }}
+                    className="game-card p-5 text-left group cursor-pointer relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl group-hover:bg-cyan-500/20 transition-all" />
+                    <div className="relative">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-glow-cyan">
+                        <Timer className="h-6 w-6 text-white" />
+                      </div>
+                      <h3 className="font-bold text-lg mb-1">Speed Run</h3>
+                      <p className="text-sm text-gray-400">60 second challenge</p>
+                      <div className="mt-3 flex items-center gap-2 text-cyan-400 text-sm font-medium">
+                        <span>+100 XP</span>
+                        <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </div>
+                  </button>
+                  
+                  <button 
+                    onClick={() => { setChallengeMode('survival'); setChallengeLives(3); }}
+                    className="game-card p-5 text-left group cursor-pointer relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-2xl group-hover:bg-red-500/20 transition-all" />
+                    <div className="relative">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-pink-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-glow-pink">
+                        <Heart className="h-6 w-6 text-white" />
+                      </div>
+                      <h3 className="font-bold text-lg mb-1">Survival Mode</h3>
+                      <p className="text-sm text-gray-400">3 lives, no mistakes</p>
+                      <div className="mt-3 flex items-center gap-2 text-red-400 text-sm font-medium">
+                        <span>+150 XP</span>
+                        <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </div>
+                  </button>
+                  
+                  <button 
+                    onClick={() => setChallengeMode('boss')}
+                    className="game-card p-5 text-left group cursor-pointer relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl group-hover:bg-purple-500/20 transition-all" />
+                    <div className="relative">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-glow">
+                        <Swords className="h-6 w-6 text-white" />
+                      </div>
+                      <h3 className="font-bold text-lg mb-1">Boss Fight</h3>
+                      <p className="text-sm text-gray-400">Hard mode unlocked</p>
+                      <div className="mt-3 flex items-center gap-2 text-purple-400 text-sm font-medium">
+                        <span>+200 XP</span>
+                        <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </div>
+                  </button>
+                </div>
               </section>
             </div>
           )}
