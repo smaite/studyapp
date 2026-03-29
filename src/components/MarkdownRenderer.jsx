@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, useEffect, useState } from 'react'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 
@@ -15,6 +15,186 @@ const renderMath = (math, displayMode = false) => {
     console.warn('KaTeX error:', e)
     return `<span class="text-amber-400 font-mono text-sm">${math}</span>`
   }
+}
+
+// Pie chart component for inline data visualization
+function PieChart({ data, title }) {
+  if (!data || !Array.isArray(data) || data.length === 0) return null
+  
+  const total = data.reduce((sum, item) => sum + (item.value || 0), 0)
+  if (total === 0) return null
+  
+  const colors = [
+    '#a855f7', '#22d3ee', '#f472b6', '#4ade80', '#facc15', 
+    '#fb923c', '#60a5fa', '#c084fc', '#34d399', '#f87171'
+  ]
+  
+  let currentAngle = 0
+  const slices = data.map((item, i) => {
+    const percentage = (item.value / total) * 100
+    const angle = (item.value / total) * 360
+    const startAngle = currentAngle
+    const endAngle = currentAngle + angle
+    currentAngle = endAngle
+    
+    const startRad = (startAngle - 90) * Math.PI / 180
+    const endRad = (endAngle - 90) * Math.PI / 180
+    const largeArc = angle > 180 ? 1 : 0
+    
+    const x1 = 50 + 40 * Math.cos(startRad)
+    const y1 = 50 + 40 * Math.sin(startRad)
+    const x2 = 50 + 40 * Math.cos(endRad)
+    const y2 = 50 + 40 * Math.sin(endRad)
+    
+    const path = `M 50 50 L ${x1} ${y1} A 40 40 0 ${largeArc} 1 ${x2} ${y2} Z`
+    
+    return { path, color: colors[i % colors.length], label: item.label || `Item ${i + 1}`, value: item.value, percentage: percentage.toFixed(1) }
+  })
+  
+  return (
+    <div className="my-4 p-4 bg-surface-800/60 rounded-xl border border-white/10">
+      {title && <h4 className="text-white font-medium mb-3 text-center">{title}</h4>}
+      <div className="flex flex-col md:flex-row items-center gap-4">
+        <svg viewBox="0 0 100 100" className="w-40 h-40 md:w-48 md:h-48">
+          {slices.map((slice, i) => (
+            <path key={i} d={slice.path} fill={slice.color} stroke="#0f0f1a" strokeWidth="0.5" className="hover:opacity-80 transition-opacity cursor-pointer">
+              <title>{slice.label}: {slice.value} ({slice.percentage}%)</title>
+            </path>
+          ))}
+        </svg>
+        <div className="flex flex-col gap-1.5">
+          {slices.map((slice, i) => (
+            <div key={i} className="flex items-center gap-2 text-sm">
+              <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: slice.color }} />
+              <span className="text-gray-300">{slice.label}</span>
+              <span className="text-gray-500">({slice.percentage}%)</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Safe HTML iframe renderer with Tailwind CSS support
+function SafeHtmlFrame({ html }) {
+  const iframeRef = useRef(null)
+  const [height, setHeight] = useState(200)
+  const frameId = useRef(`frame-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  
+  useEffect(() => {
+    if (!iframeRef.current) return
+    
+    const iframe = iframeRef.current
+    const doc = iframe.contentDocument || iframe.contentWindow?.document
+    if (!doc) return
+    
+    const content = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script src="https://cdn.tailwindcss.com"><\/script>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+          * { box-sizing: border-box; }
+          body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 16px;
+            background: transparent;
+            color: #e5e7eb;
+          }
+          /* Letter/Document styles */
+          .letter, .document, .card, .application, .formal-letter {
+            background: linear-gradient(135deg, rgba(30, 30, 50, 0.95), rgba(20, 20, 40, 0.98));
+            border: 1px solid rgba(168, 85, 247, 0.25);
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+          }
+          .letter-header, .document-header {
+            border-bottom: 1px solid rgba(168, 85, 247, 0.2);
+            padding-bottom: 16px;
+            margin-bottom: 20px;
+          }
+          .letter-footer, .document-footer {
+            border-top: 1px solid rgba(168, 85, 247, 0.2);
+            padding-top: 16px;
+            margin-top: 20px;
+          }
+          h1, h2, h3, h4 { color: #fff; font-family: 'Rajdhani', sans-serif; }
+          p { color: #d1d5db; line-height: 1.7; margin: 12px 0; }
+          a { color: #a855f7; }
+          .signature { font-style: italic; margin-top: 24px; }
+          .date { color: #9ca3af; font-size: 0.9em; }
+          .subject { font-weight: 600; color: #fff; margin: 16px 0; }
+          /* Table styles */
+          table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+          th, td { padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); }
+          th { background: rgba(168, 85, 247, 0.15); color: #fff; }
+          tr:hover { background: rgba(255,255,255,0.02); }
+          /* List styles */
+          ul, ol { padding-left: 24px; color: #d1d5db; }
+          li { margin: 8px 0; }
+          /* Form styles for interactive elements */
+          input, textarea, select {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: #fff;
+            width: 100%;
+            margin: 4px 0;
+          }
+          input:focus, textarea:focus { outline: none; border-color: #a855f7; }
+          /* Chart container */
+          .chart-container { padding: 16px; background: rgba(0,0,0,0.2); border-radius: 8px; margin: 16px 0; }
+        </style>
+      </head>
+      <body>
+        ${html}
+        <script>
+          const frameId = '${frameId.current}';
+          function sendHeight() {
+            const h = Math.max(document.body.scrollHeight, document.body.offsetHeight);
+            window.parent.postMessage({ type: 'iframe-resize', frameId, height: h + 32 }, '*');
+          }
+          sendHeight();
+          setTimeout(sendHeight, 100);
+          setTimeout(sendHeight, 300);
+          setTimeout(sendHeight, 600);
+          new ResizeObserver(sendHeight).observe(document.body);
+        <\/script>
+      </body>
+      </html>
+    `
+    
+    doc.open()
+    doc.write(content)
+    doc.close()
+  }, [html])
+  
+  useEffect(() => {
+    const handleMessage = (e) => {
+      if (e.data?.type === 'iframe-resize' && e.data.frameId === frameId.current && e.data.height) {
+        setHeight(Math.min(800, Math.max(100, e.data.height)))
+      }
+    }
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [])
+  
+  return (
+    <iframe
+      ref={iframeRef}
+      className="w-full border-0 rounded-xl bg-surface-800/40"
+      style={{ height: `${height}px` }}
+      sandbox="allow-scripts"
+      title="HTML Preview"
+    />
+  )
 }
 
 // Enhanced markdown parser for AI responses with math support
@@ -134,3 +314,122 @@ export default function MarkdownRenderer({ content, className = '' }) {
     />
   )
 }
+
+// Smart Content Renderer - handles HTML previews, pie charts, and markdown inline
+// Detects special blocks and renders them appropriately while keeping text in markdown
+export function SmartContentRenderer({ content, className = '' }) {
+  const parts = useMemo(() => {
+    if (!content) return []
+    
+    const result = []
+    let remaining = content
+    
+    // Patterns for special blocks that should be rendered as previews
+    // ```html-preview ... ``` - explicit HTML preview block
+    // [[html]] ... [[/html]] - alternative HTML block syntax
+    // [[pie:title|label:value|...]] - pie chart
+    const patterns = [
+      { 
+        regex: /```html-preview\n([\s\S]*?)```/g, 
+        type: 'html',
+        extract: (m) => m[1].trim()
+      },
+      { 
+        regex: /\[\[html\]\]([\s\S]*?)\[\[\/html\]\]/g, 
+        type: 'html',
+        extract: (m) => m[1].trim()
+      },
+      {
+        regex: /\[\[pie:([^|]*)\|(.*?)\]\]/gs,
+        type: 'pie',
+        extract: (m) => {
+          const title = m[1].trim()
+          const dataStr = m[2]
+          const data = dataStr.split('|').map(item => {
+            const parts = item.split(':')
+            const label = parts[0]?.trim() || ''
+            const value = parseFloat(parts[1]) || 0
+            return { label, value }
+          }).filter(d => d.value > 0 && d.label)
+          return { title, data }
+        }
+      }
+    ]
+    
+    // Find all special blocks with positions
+    const blocks = []
+    patterns.forEach(({ regex, type, extract }) => {
+      const re = new RegExp(regex.source, regex.flags)
+      let match
+      while ((match = re.exec(content)) !== null) {
+        blocks.push({
+          type,
+          start: match.index,
+          end: match.index + match[0].length,
+          data: extract(match)
+        })
+      }
+    })
+    
+    // Sort by position
+    blocks.sort((a, b) => a.start - b.start)
+    
+    // Split content into parts
+    let lastEnd = 0
+    blocks.forEach(block => {
+      // Text before this block
+      if (block.start > lastEnd) {
+        const text = content.slice(lastEnd, block.start).trim()
+        if (text) {
+          result.push({ type: 'markdown', content: text })
+        }
+      }
+      // The block itself
+      result.push({ type: block.type, data: block.data })
+      lastEnd = block.end
+    })
+    
+    // Remaining text after last block
+    if (lastEnd < content.length) {
+      const text = content.slice(lastEnd).trim()
+      if (text) {
+        result.push({ type: 'markdown', content: text })
+      }
+    }
+    
+    // If no special blocks found, return single markdown part
+    if (result.length === 0 && content.trim()) {
+      result.push({ type: 'markdown', content: content.trim() })
+    }
+    
+    return result
+  }, [content])
+  
+  if (parts.length === 0) return null
+  
+  return (
+    <div className={`space-y-4 ${className}`}>
+      {parts.map((part, i) => {
+        if (part.type === 'html') {
+          return (
+            <div key={i} className="my-3">
+              <SafeHtmlFrame html={part.data} />
+            </div>
+          )
+        }
+        
+        if (part.type === 'pie') {
+          return (
+            <PieChart key={i} title={part.data.title} data={part.data.data} />
+          )
+        }
+        
+        // Regular markdown content
+        return <MarkdownRenderer key={i} content={part.content} />
+      })}
+    </div>
+  )
+}
+
+// Export components for direct use
+export { PieChart, SafeHtmlFrame }

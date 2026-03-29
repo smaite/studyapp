@@ -14,7 +14,7 @@ import {
 import { sendMessage, analyzeImage } from '../services/aiService'
 import { loadAllUserData, syncAllSubjects, deleteUserSubject, saveUserProgress } from '../services/userDataService'
 import voiceService from '../services/voiceService'
-import MarkdownRenderer from '../components/MarkdownRenderer'
+import MarkdownRenderer, { SmartContentRenderer } from '../components/MarkdownRenderer'
 import MathKeyboard from '../components/MathKeyboard'
 import SolvingSteps from '../components/SolvingSteps'
 import { useAuth } from '../contexts/AuthContext'
@@ -3646,9 +3646,9 @@ Respond in ${activeCourse?.language || 'English'} language.`
                         </div>
                       ) : (
                         <>
-                          {/* Main content - cleaner card like Astra AI */}
+                          {/* Main content - cleaner card like Astra AI with smart HTML preview */}
                           <div className="bg-surface-800/60 rounded-2xl p-4 border border-white/5">
-                            <MarkdownRenderer content={msg.content} />
+                            <SmartContentRenderer content={msg.content} />
                           </div>
                           
                           {/* Step-by-step solution display */}
@@ -4197,7 +4197,7 @@ Respond in ${activeCourse?.language || 'English'} language.`
                           )}
                           
                           <div className="bg-surface-800/80 rounded-2xl p-4 border border-white/5">
-                            <MarkdownRenderer content={msg.content} />
+                            <SmartContentRenderer content={msg.content} />
                           </div>
 
                           {msg.diagram && (
