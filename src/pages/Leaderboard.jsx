@@ -417,7 +417,9 @@ export default function Leaderboard() {
         {/* Rest of leaderboard */}
         <div className="space-y-2">
           <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Rankings</p>
-          {leaderboard.slice(3).map((entry) => (
+          
+          {/* Show all players if less than 3, otherwise skip first 3 (shown in podium) */}
+          {(leaderboard.length < 3 ? leaderboard : leaderboard.slice(3)).map((entry) => (
             <LeaderboardRow 
               key={entry.id} 
               entry={entry} 

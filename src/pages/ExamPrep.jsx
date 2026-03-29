@@ -2890,13 +2890,15 @@ Respond in ${activeCourse?.language || 'English'} language.`
                       </div>
                       <p className="text-xs text-green-300/70 font-medium">Accuracy</p>
                     </div>
-                    <div className="bg-gradient-to-br from-purple-500/20 to-pink-500/10 rounded-xl px-4 py-3 text-center border border-purple-500/20 hover:border-purple-500/40 transition-all cursor-default group">
-                      <div className="flex items-center justify-center gap-1.5 text-purple-400 mb-1 group-hover:scale-110 transition-transform">
+                    <button 
+                      onClick={() => window.location.href = '/leaderboard'}
+                      className="bg-gradient-to-br from-amber-500/20 to-yellow-500/10 rounded-xl px-4 py-3 text-center border border-amber-500/20 hover:border-amber-500/40 hover:scale-105 transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-center gap-1.5 text-amber-400 mb-1 group-hover:scale-110 transition-transform">
                         <Trophy className="h-5 w-5" />
-                        <span className="text-2xl font-bold">{userProgress.challengesWon}</span>
                       </div>
-                      <p className="text-xs text-purple-300/70 font-medium">Victories</p>
-                    </div>
+                      <p className="text-xs text-amber-300/70 font-medium">Leaderboard</p>
+                    </button>
                   </div>
                 </div>
                 
