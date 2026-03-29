@@ -76,105 +76,88 @@ function PieChart({ data, title }) {
   )
 }
 
-// Safe HTML iframe renderer with Tailwind CSS support
+// Safe HTML iframe renderer with Tailwind CSS support - uses srcdoc to avoid cross-origin issues
 function SafeHtmlFrame({ html }) {
-  const iframeRef = useRef(null)
   const [height, setHeight] = useState(200)
   const frameId = useRef(`frame-${Date.now()}-${Math.random().toString(36).slice(2)}`)
   
-  useEffect(() => {
-    if (!iframeRef.current) return
-    
-    const iframe = iframeRef.current
-    const doc = iframe.contentDocument || iframe.contentWindow?.document
-    if (!doc) return
-    
-    const content = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <script src="https://cdn.tailwindcss.com"><\/script>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
-        <style>
-          * { box-sizing: border-box; }
-          body { 
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            margin: 0;
-            padding: 16px;
-            background: transparent;
-            color: #e5e7eb;
-          }
-          /* Letter/Document styles */
-          .letter, .document, .card, .application, .formal-letter {
-            background: linear-gradient(135deg, rgba(30, 30, 50, 0.95), rgba(20, 20, 40, 0.98));
-            border: 1px solid rgba(168, 85, 247, 0.25);
-            border-radius: 12px;
-            padding: 32px;
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
-          }
-          .letter-header, .document-header {
-            border-bottom: 1px solid rgba(168, 85, 247, 0.2);
-            padding-bottom: 16px;
-            margin-bottom: 20px;
-          }
-          .letter-footer, .document-footer {
-            border-top: 1px solid rgba(168, 85, 247, 0.2);
-            padding-top: 16px;
-            margin-top: 20px;
-          }
-          h1, h2, h3, h4 { color: #fff; font-family: 'Rajdhani', sans-serif; }
-          p { color: #d1d5db; line-height: 1.7; margin: 12px 0; }
-          a { color: #a855f7; }
-          .signature { font-style: italic; margin-top: 24px; }
-          .date { color: #9ca3af; font-size: 0.9em; }
-          .subject { font-weight: 600; color: #fff; margin: 16px 0; }
-          /* Table styles */
-          table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-          th, td { padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); }
-          th { background: rgba(168, 85, 247, 0.15); color: #fff; }
-          tr:hover { background: rgba(255,255,255,0.02); }
-          /* List styles */
-          ul, ol { padding-left: 24px; color: #d1d5db; }
-          li { margin: 8px 0; }
-          /* Form styles for interactive elements */
-          input, textarea, select {
-            background: rgba(0,0,0,0.3);
-            border: 1px solid rgba(168, 85, 247, 0.3);
-            border-radius: 8px;
-            padding: 8px 12px;
-            color: #fff;
-            width: 100%;
-            margin: 4px 0;
-          }
-          input:focus, textarea:focus { outline: none; border-color: #a855f7; }
-          /* Chart container */
-          .chart-container { padding: 16px; background: rgba(0,0,0,0.2); border-radius: 8px; margin: 16px 0; }
-        </style>
-      </head>
-      <body>
-        ${html}
-        <script>
-          const frameId = '${frameId.current}';
-          function sendHeight() {
-            const h = Math.max(document.body.scrollHeight, document.body.offsetHeight);
-            window.parent.postMessage({ type: 'iframe-resize', frameId, height: h + 32 }, '*');
-          }
-          sendHeight();
-          setTimeout(sendHeight, 100);
-          setTimeout(sendHeight, 300);
-          setTimeout(sendHeight, 600);
-          new ResizeObserver(sendHeight).observe(document.body);
-        <\/script>
-      </body>
-      </html>
-    `
-    
-    doc.open()
-    doc.write(content)
-    doc.close()
-  }, [html])
+  // Build srcdoc content
+  const srcdoc = useMemo(() => `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <script src="https://cdn.tailwindcss.com"><\/script>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+      <style>
+        * { box-sizing: border-box; }
+        body { 
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+          margin: 0;
+          padding: 16px;
+          background: transparent;
+          color: #e5e7eb;
+        }
+        .letter, .document, .card, .application, .formal-letter {
+          background: linear-gradient(135deg, rgba(30, 30, 50, 0.95), rgba(20, 20, 40, 0.98));
+          border: 1px solid rgba(168, 85, 247, 0.25);
+          border-radius: 12px;
+          padding: 32px;
+          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+        }
+        .letter-header, .document-header {
+          border-bottom: 1px solid rgba(168, 85, 247, 0.2);
+          padding-bottom: 16px;
+          margin-bottom: 20px;
+        }
+        .letter-footer, .document-footer {
+          border-top: 1px solid rgba(168, 85, 247, 0.2);
+          padding-top: 16px;
+          margin-top: 20px;
+        }
+        h1, h2, h3, h4 { color: #fff; font-family: 'Rajdhani', sans-serif; }
+        p { color: #d1d5db; line-height: 1.7; margin: 12px 0; }
+        a { color: #a855f7; }
+        .signature { font-style: italic; margin-top: 24px; }
+        .date { color: #9ca3af; font-size: 0.9em; }
+        .subject { font-weight: 600; color: #fff; margin: 16px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        th { background: rgba(168, 85, 247, 0.15); color: #fff; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+        ul, ol { padding-left: 24px; color: #d1d5db; }
+        li { margin: 8px 0; }
+        input, textarea, select {
+          background: rgba(0,0,0,0.3);
+          border: 1px solid rgba(168, 85, 247, 0.3);
+          border-radius: 8px;
+          padding: 8px 12px;
+          color: #fff;
+          width: 100%;
+          margin: 4px 0;
+        }
+        input:focus, textarea:focus { outline: none; border-color: #a855f7; }
+        .chart-container { padding: 16px; background: rgba(0,0,0,0.2); border-radius: 8px; margin: 16px 0; }
+      </style>
+    </head>
+    <body>
+      ${html}
+      <script>
+        const frameId = '${frameId.current}';
+        function sendHeight() {
+          const h = Math.max(document.body.scrollHeight, document.body.offsetHeight);
+          window.parent.postMessage({ type: 'iframe-resize', frameId, height: h + 32 }, '*');
+        }
+        sendHeight();
+        setTimeout(sendHeight, 100);
+        setTimeout(sendHeight, 300);
+        setTimeout(sendHeight, 600);
+        new ResizeObserver(sendHeight).observe(document.body);
+      <\/script>
+    </body>
+    </html>
+  `, [html])
   
   useEffect(() => {
     const handleMessage = (e) => {
@@ -188,7 +171,7 @@ function SafeHtmlFrame({ html }) {
   
   return (
     <iframe
-      ref={iframeRef}
+      srcDoc={srcdoc}
       className="w-full border-0 rounded-xl bg-surface-800/40"
       style={{ height: `${height}px` }}
       sandbox="allow-scripts"
@@ -205,11 +188,19 @@ export default function MarkdownRenderer({ content, className = '' }) {
     
     let html = content
     
-    // Store code blocks and math to prevent processing
+    // Store code blocks, math, and SVG to prevent processing
     const codeBlocks = []
     const mathBlocks = []
+    const svgBlocks = []
     
-    // Extract code blocks first
+    // Extract SVG blocks first to protect them
+    html = html.replace(/<svg[\s\S]*?<\/svg>/gi, (match) => {
+      const id = svgBlocks.length
+      svgBlocks.push(match)
+      return `__SVG_BLOCK_${id}__`
+    })
+    
+    // Extract code blocks
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
       const id = codeBlocks.length
       codeBlocks.push({ lang, code: code.trim() })
@@ -234,9 +225,9 @@ export default function MarkdownRenderer({ content, className = '' }) {
       return `__MATH_BLOCK_${id}__`
     })
     
-    // Escape HTML (after extracting math/code)
+    // Escape HTML (after extracting math/code/svg)
     html = html.replace(/&(?!#?\w+;)/g, '&amp;')
-    html = html.replace(/<(?![/]?(?:span|div|svg|path|semantics|annotation|math|mrow|mi|mn|mo|mfrac|msup|msub|munder|mover|mspace|mtext|mstyle|mglyph|mpadded|mphantom|menclose|mfenced|mtable|mtr|mtd|maligngroup|malignmark|mscarries|mscarry|msline|msgroup|msrow|ms|mstack|mlongdiv|mlabeledtr|none|mprescripts|mmultiscripts)[^>]*>)/g, '&lt;')
+    html = html.replace(/<(?![/]?(?:span|div|svg|path|circle|rect|line|polygon|polyline|ellipse|g|defs|use|symbol|clipPath|mask|pattern|linearGradient|radialGradient|stop|text|tspan|semantics|annotation|math|mrow|mi|mn|mo|mfrac|msup|msub|munder|mover|mspace|mtext|mstyle|mglyph|mpadded|mphantom|menclose|mfenced|mtable|mtr|mtd|maligngroup|malignmark|mscarries|mscarry|msline|msgroup|msrow|ms|mstack|mlongdiv|mlabeledtr|none|mprescripts|mmultiscripts)[^>]*>)/g, '&lt;')
     
     // Inline code (after escaping) - dark mode with cyan accent
     html = html.replace(/`([^`]+)`/g, '<code class="bg-primary-500/20 text-primary-300 px-1.5 py-0.5 rounded text-sm font-mono">$1</code>')
@@ -294,15 +285,20 @@ export default function MarkdownRenderer({ content, className = '' }) {
     // Paragraphs - wrap remaining text blocks - good contrast
     html = html.split('\n\n').map(block => {
       if (!block.trim()) return ''
-      // Don't wrap if already has block-level HTML
-      if (block.match(/^<(h[1-6]|ul|ol|pre|blockquote|hr|div)/)) {
+      // Don't wrap if already has block-level HTML or placeholder
+      if (block.match(/^<(h[1-6]|ul|ol|pre|blockquote|hr|div)/) || block.includes('__SVG_BLOCK_')) {
         return block
       }
       return `<p class="text-gray-200 leading-relaxed my-2">${block}</p>`
     }).join('')
     
-    // Single line breaks within paragraphs
-    html = html.replace(/([^>])\n([^<])/g, '$1<br />$2')
+    // Single line breaks within paragraphs (but not around placeholders)
+    html = html.replace(/([^>_])\n([^<_])/g, '$1<br />$2')
+    
+    // Restore SVG blocks last (after all text processing)
+    svgBlocks.forEach((svg, id) => {
+      html = html.replace(`__SVG_BLOCK_${id}__`, svg)
+    })
     
     return html
   }, [content])
