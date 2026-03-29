@@ -164,7 +164,7 @@ export async function loadUserProgress(userId) {
   }
 }
 
-export async function saveUserProgress(userId, progress) {
+export async function saveUserProgress(userId, progress, displayName = null) {
   if (!userId) return { error: 'No user ID' }
   
   const progressData = {
@@ -178,6 +178,11 @@ export async function saveUserProgress(userId, progress) {
     achievements: progress.achievements || [],
     challenges_won: progress.challengesWon || 0,
     updated_at: new Date().toISOString()
+  }
+  
+  // Include display name if provided
+  if (displayName) {
+    progressData.display_name = displayName
   }
   
   const { error } = await supabase

@@ -4743,13 +4743,11 @@ Respond in ${activeCourse?.language || 'English'} language.`
           </button>
           
           <button
-            onClick={() => activeCourse ? setView('course') : null}
-            className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all cursor-pointer ${
-              view === 'course' ? 'text-primary-400 bg-primary-500/20 shadow-glow-sm' : 'text-gray-500 active:bg-primary-500/10'
-            } ${!activeCourse ? 'opacity-40' : ''}`}
+            onClick={() => window.location.href = '/leaderboard'}
+            className="flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all cursor-pointer text-gray-500 active:bg-primary-500/10"
           >
-            <BookOpen className="h-5 w-5" />
-            <span className="text-[10px] font-medium">Quest</span>
+            <Trophy className="h-5 w-5" />
+            <span className="text-[10px] font-medium">Rank</span>
           </button>
         </div>
       </nav>

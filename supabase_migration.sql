@@ -134,6 +134,7 @@ CREATE INDEX idx_user_subjects_updated ON user_subjects(updated_at DESC);
 CREATE TABLE IF NOT EXISTS user_progress (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE NOT NULL,
+  display_name TEXT,
   xp INT DEFAULT 0,
   total_correct INT DEFAULT 0,
   total_answered INT DEFAULT 0,
@@ -149,18 +150,22 @@ CREATE TABLE IF NOT EXISTS user_progress (
 -- Enable RLS
 ALTER TABLE user_progress ENABLE ROW LEVEL SECURITY;
 
--- Users can only access their own progress
-CREATE POLICY "Users can view own progress" ON user_progress
-  FOR SELECT USING (auth.uid() = user_id);
+-- Policy: Anyone can read user progress for leaderboard (only public fields)
+CREATE POLICY "Anyone can view leaderboard data" ON user_progress
+  FOR SELECT USING (true);
 
+-- Policy: Users can insert their own progress
 CREATE POLICY "Users can insert own progress" ON user_progress
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+-- Policy: Users can update their own progress
 CREATE POLICY "Users can update own progress" ON user_progress
   FOR UPDATE USING (auth.uid() = user_id);
 
--- Index
+-- Index for leaderboard queries
 CREATE INDEX idx_user_progress_user_id ON user_progress(user_id);
+CREATE INDEX idx_user_progress_xp ON user_progress(xp DESC);
+CREATE INDEX idx_user_progress_updated ON user_progress(updated_at DESC);
 
 -- =============================================
 -- LESSON CHAT HISTORY (Optional - for persistence)

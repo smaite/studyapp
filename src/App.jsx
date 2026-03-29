@@ -7,6 +7,7 @@ import Landing from './pages/Landing'
 import Subjects from './pages/Subjects'
 import Tutor from './pages/Tutor'
 import ExamPrep from './pages/ExamPrep'
+import Leaderboard from './pages/Leaderboard'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import { Loader2 } from 'lucide-react'
@@ -113,6 +114,11 @@ function AppRoutes() {
         <Route path="/exam-prep" element={
           <ProtectedRoute>
             <ExamPrep />
+          </ProtectedRoute>
+        } />
+        <Route path="/leaderboard" element={
+          <ProtectedRoute>
+            <Leaderboard />
           </ProtectedRoute>
         } />
       </Routes>
