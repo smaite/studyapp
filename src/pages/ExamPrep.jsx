@@ -2431,15 +2431,27 @@ Remember: EVERYTHING must be in ${targetLanguage} ONLY. No English unless ${targ
   const speakMessage = (text) => {
     if (!voiceEnabled) return
     
-    // Clean text for speech (remove markdown, etc.)
+    // Clean text for speech (remove markdown, HTML preview blocks, etc.)
     const cleanText = text
+      // Remove HTML preview blocks completely
+      .replace(/```html-preview[\s\S]*?```/g, '')
+      .replace(/\[\[html\]\][\s\S]*?\[\[\/html\]\]/g, '')
+      .replace(/\[\[pie:[^\]]*\]\]/g, '')
+      // Remove any remaining HTML tags
+      .replace(/<[^>]+>/g, '')
+      // Remove markdown formatting
       .replace(/\*\*(.*?)\*\*/g, '$1')
       .replace(/\*(.*?)\*/g, '$1')
       .replace(/`(.*?)`/g, '$1')
       .replace(/#{1,6}\s/g, '')
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
       .replace(/[*_~`#]/g, '')
+      // Clean up extra whitespace
+      .replace(/\s+/g, ' ')
+      .trim()
       .substring(0, 500) // Limit length for speech
+    
+    if (!cleanText) return
     
     voiceService.setLanguage(voiceLang)
     setIsSpeaking(true)
