@@ -81,83 +81,75 @@ function SafeHtmlFrame({ html }) {
   const [height, setHeight] = useState(200)
   const frameId = useRef(`frame-${Date.now()}-${Math.random().toString(36).slice(2)}`)
   
-  // Build srcdoc content - professional dark theme for documents
+  // Build srcdoc content - professional dark theme optimized for mobile
   const srcdoc = useMemo(() => `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <script src="https://cdn.tailwindcss.com"><\/script>
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:wght@300;400;700&family=Source+Serif+4:wght@400;500;600&display=swap" rel="stylesheet">
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
       <style>
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body { 
           font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-          margin: 0;
-          padding: 20px;
-          background: #0a0a14;
-          color: #c9cdd4;
-          font-size: 14px;
-          line-height: 1.6;
+          padding: 16px;
+          background: #0d0d15;
+          color: #d1d5db;
+          font-size: 15px;
+          line-height: 1.65;
+          -webkit-font-smoothing: antialiased;
         }
-        /* Default document wrapper - dark professional theme */
+        /* Document wrapper - clean dark theme */
         .letter, .document, .card, .application, .formal-letter {
-          background: linear-gradient(145deg, #12121e 0%, #0d0d18 100%);
-          border: 1px solid rgba(99, 102, 115, 0.2);
-          border-radius: 10px;
-          padding: 28px 32px;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-          font-family: 'Source Serif 4', 'Merriweather', Georgia, serif;
+          background: #111118;
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 12px;
+          padding: 20px;
+        }
+        @media (min-width: 480px) {
+          .letter, .document, .card, .application, .formal-letter {
+            padding: 28px;
+          }
         }
         .letter-header, .document-header {
-          border-bottom: 1px solid rgba(99, 102, 115, 0.15);
-          padding-bottom: 14px;
-          margin-bottom: 18px;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+          padding-bottom: 12px;
+          margin-bottom: 16px;
         }
         .letter-footer, .document-footer {
-          border-top: 1px solid rgba(99, 102, 115, 0.15);
-          padding-top: 14px;
-          margin-top: 18px;
+          border-top: 1px solid rgba(255,255,255,0.06);
+          padding-top: 12px;
+          margin-top: 16px;
         }
-        /* Typography - muted professional colors */
-        h1 { color: #e8eaed; font-size: 1.5em; font-weight: 600; margin: 0 0 16px 0; font-family: 'Inter', sans-serif; }
-        h2 { color: #e0e2e6; font-size: 1.25em; font-weight: 600; margin: 0 0 12px 0; font-family: 'Inter', sans-serif; }
-        h3, h4 { color: #d4d6da; font-size: 1.1em; font-weight: 500; margin: 0 0 10px 0; font-family: 'Inter', sans-serif; }
-        p { color: #b8bcc5; line-height: 1.75; margin: 10px 0; font-size: 14px; }
-        a { color: #7c8aff; text-decoration: none; }
-        a:hover { text-decoration: underline; }
+        /* Typography - readable on mobile */
+        h1 { color: #f3f4f6; font-size: 1.35em; font-weight: 600; margin-bottom: 14px; }
+        h2 { color: #e5e7eb; font-size: 1.15em; font-weight: 600; margin-bottom: 12px; }
+        h3, h4 { color: #d1d5db; font-size: 1.05em; font-weight: 500; margin-bottom: 10px; }
+        p { 
+          color: #b8bcc5; 
+          line-height: 1.7; 
+          margin: 10px 0; 
+          text-align: left !important;
+          word-spacing: normal !important;
+        }
+        a { color: #818cf8; text-decoration: none; }
         /* Document elements */
-        .signature { font-style: italic; margin-top: 24px; color: #9ca3af; }
-        .date { color: #8b909a; font-size: 0.9em; margin-bottom: 16px; }
-        .subject { font-weight: 600; color: #d1d5db; margin: 14px 0; }
-        .to, .from { color: #9ca3af; margin: 4px 0; }
-        /* Table styles */
-        table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid rgba(99, 102, 115, 0.15); color: #b8bcc5; }
-        th { background: rgba(30, 32, 48, 0.6); color: #d1d5db; font-weight: 500; }
-        tr:hover { background: rgba(255, 255, 255, 0.02); }
-        /* List styles */
-        ul, ol { padding-left: 20px; color: #b8bcc5; margin: 10px 0; }
-        li { margin: 6px 0; }
-        /* Form styles */
-        input, textarea, select {
-          background: rgba(15, 15, 25, 0.8);
-          border: 1px solid rgba(99, 102, 115, 0.25);
-          border-radius: 6px;
-          padding: 8px 12px;
-          color: #d1d5db;
-          width: 100%;
-          margin: 4px 0;
-          font-size: 14px;
-        }
-        input:focus, textarea:focus { outline: none; border-color: rgba(124, 138, 255, 0.5); }
-        /* Chart container */
-        .chart-container { padding: 16px; background: rgba(15, 15, 25, 0.5); border-radius: 8px; margin: 16px 0; }
-        /* Strong/bold text */
-        strong, b { color: #d8dae0; font-weight: 600; }
-        /* Code inline */
-        code { background: rgba(30, 32, 48, 0.8); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; color: #a5b4fc; }
+        .signature { font-style: italic; margin-top: 20px; color: #9ca3af; }
+        .date { color: #9ca3af; font-size: 0.9em; margin-bottom: 14px; }
+        .subject { font-weight: 600; color: #e5e7eb; margin: 12px 0; }
+        .to, .from, .address { color: #9ca3af; margin: 3px 0; font-size: 0.95em; }
+        /* Table - mobile friendly */
+        table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 0.9em; }
+        th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06); color: #b8bcc5; }
+        th { background: rgba(255,255,255,0.03); color: #d1d5db; font-weight: 500; }
+        /* Lists */
+        ul, ol { padding-left: 18px; color: #b8bcc5; margin: 10px 0; }
+        li { margin: 5px 0; }
+        /* Strong text */
+        strong, b { color: #e5e7eb; font-weight: 600; }
+        /* Spacing helpers */
+        br { display: block; content: ""; margin-top: 8px; }
       </style>
     </head>
     <body>
@@ -166,13 +158,15 @@ function SafeHtmlFrame({ html }) {
         const frameId = '${frameId.current}';
         function sendHeight() {
           const h = Math.max(document.body.scrollHeight, document.body.offsetHeight);
-          window.parent.postMessage({ type: 'iframe-resize', frameId, height: h + 32 }, '*');
+          window.parent.postMessage({ type: 'iframe-resize', frameId, height: h + 24 }, '*');
         }
         sendHeight();
-        setTimeout(sendHeight, 100);
-        setTimeout(sendHeight, 300);
-        setTimeout(sendHeight, 600);
-        new ResizeObserver(sendHeight).observe(document.body);
+        setTimeout(sendHeight, 50);
+        setTimeout(sendHeight, 150);
+        setTimeout(sendHeight, 400);
+        if (typeof ResizeObserver !== 'undefined') {
+          new ResizeObserver(sendHeight).observe(document.body);
+        }
       <\/script>
     </body>
     </html>
